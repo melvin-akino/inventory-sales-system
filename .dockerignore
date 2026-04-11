@@ -1,0 +1,10 @@
+node_modules
+dist
+target
+.git
+*.log
+*.md
+docs
+setup.sh
+.env
+src-tauri/target
