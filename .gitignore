@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+
+# Tauri
+src-tauri/target/
+src-tauri/*.db
+*.db
+*.db-wal
+*.db-shm
+
+# Rust
+target/
+Cargo.lock
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

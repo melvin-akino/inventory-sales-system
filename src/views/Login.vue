@@ -1,0 +1,87 @@
+<template>
+  <div class="min-h-screen bg-gradient-to-br from-gray-900 via-primary-900 to-gray-900 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 rounded-2xl bg-primary-500 mx-auto flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-xl">L</div>
+        <h1 class="text-2xl font-bold text-white">LumiSync</h1>
+        <p class="text-gray-400 text-sm mt-1">Inventory & Sales System</p>
+      </div>
+
+      <!-- Card -->
+      <div class="bg-white rounded-2xl shadow-2xl p-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-6">Sign in to your account</h2>
+
+        <form @submit.prevent="handleLogin" class="space-y-4">
+          <div>
+            <label class="label">Username</label>
+            <input
+              v-model="form.username"
+              type="text"
+              class="input"
+              placeholder="Enter username"
+              autocomplete="username"
+              required
+            />
+          </div>
+
+          <div>
+            <label class="label">Password</label>
+            <div class="relative">
+              <input
+                v-model="form.password"
+                :type="showPassword ? 'text' : 'password'"
+                class="input pr-10"
+                placeholder="Enter password"
+                autocomplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >{{ showPassword ? '🙈' : '👁️' }}</button>
+            </div>
+          </div>
+
+          <div v-if="authStore.error" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+            {{ authStore.error }}
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary w-full py-2.5"
+            :disabled="authStore.loading"
+          >
+            <span v-if="authStore.loading">Signing in…</span>
+            <span v-else>Sign In</span>
+          </button>
+        </form>
+
+        <p class="text-center text-xs text-gray-400 mt-6">
+          Default: admin / Admin@123
+        </p>
+      </div>
+
+      <p class="text-center text-xs text-gray-500 mt-6">
+        LumiSync Electronics · Philippines
+      </p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const showPassword = ref(false)
+const form = ref({ username: '', password: '' })
+
+async function handleLogin() {
+  const ok = await authStore.login(form.value.username, form.value.password)
+  if (ok) router.push('/dashboard')
+}
+</script>
