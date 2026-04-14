@@ -10,6 +10,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/help',
+    name: 'Help',
+    component: () => import('@/views/Help.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/',
     component: () => import('@/components/layout/AppLayout.vue'),
     meta: { requiresAuth: true },
@@ -116,19 +122,6 @@ const routes = [
         component: () => import('@/views/Settings.vue'),
         meta: { title: 'System Settings', roles: ACCESS.SUPER },
       },
-      // Help Center
-      {
-        path: 'help',
-        name: 'Help',
-        component: () => import('@/views/help/HelpCenter.vue'),
-        meta: { title: 'Help Center', roles: ACCESS.FULL },
-      },
-      {
-        path: 'help/:topic',
-        name: 'HelpTopic',
-        component: () => import('@/views/help/HelpTopic.vue'),
-        meta: { title: 'Help', roles: ACCESS.FULL },
-      },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
@@ -137,6 +130,9 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
+  scrollBehavior() {
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async (to, from, next) => {

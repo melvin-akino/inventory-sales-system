@@ -1,13 +1,24 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-gray-900 via-primary-900 to-gray-900 flex items-center justify-center p-4">
     <div class="w-full max-w-sm">
-      <!-- Logo -->
+      <!-- Logo & Company Info -->
       <div class="text-center mb-8">
-        <div class="w-16 h-16 rounded-2xl bg-primary-500 mx-auto flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-xl">
+        <!-- Company Logo or Avatar -->
+        <div v-if="companyLogo" class="mb-4 flex justify-center">
+          <img :src="companyLogo" :alt="companyName" class="h-20 w-20 object-contain" />
+        </div>
+        <div v-else class="w-20 h-20 rounded-2xl bg-primary-500 mx-auto flex items-center justify-center text-white text-4xl font-bold mb-4 shadow-xl">
           {{ companyInitial }}
         </div>
-        <h1 class="text-2xl font-bold text-white">{{ companyName }}</h1>
-        <p class="text-gray-400 text-sm mt-1">{{ companySubtitle }}</p>
+        
+        <!-- Company Name -->
+        <h1 class="text-3xl font-bold text-white">{{ companyName }}</h1>
+        
+        <!-- Company Subtitle/Description -->
+        <p class="text-gray-300 text-sm mt-2">{{ companySubtitle }}</p>
+        
+        <!-- Company Address/Location -->
+        <p class="text-gray-400 text-xs mt-1">{{ companyAddress }}</p>
       </div>
 
       <!-- Card -->
@@ -60,8 +71,11 @@
           </button>
         </form>
 
-        <p class="text-center text-xs text-gray-400 mt-6">
-          Default: admin / Admin@123
+        <p class="text-center text-xs text-gray-500 mt-6">
+          Default login: admin / Admin@123
+        </p>
+        <p class="text-center text-xs text-gray-600 mt-2">
+          <router-link to="/help" class="text-primary-500 hover:text-primary-600 underline">Need help?</router-link>
         </p>
       </div>
 
@@ -87,8 +101,12 @@ const form = ref({ username: '', password: '' })
 const companyName = ref('LumiSync')
 const companyAddress = ref('Philippines')
 const companySubtitle = ref('Inventory & Sales System')
+const companyLogo = ref('')
 
-const companyInitial = computed(() => companyName.value.charAt(0).toUpperCase())
+const companyInitial = computed(() => {
+  const parts = companyName.value.trim().split(' ')
+  return parts.map(p => p.charAt(0).toUpperCase()).slice(0, 2).join('')
+})
 const companyDisplayText = computed(() => `${companyName.value} · ${companyAddress.value}`)
 
 async function loadCompanyInfo() {
@@ -99,6 +117,14 @@ async function loadCompanyInfo() {
     if (settings && typeof settings === 'object') {
       companyName.value = settings.company_name || 'LumiSync'
       companyAddress.value = settings.company_address || 'Philippines'
+      companySubtitle.value = settings.company_subtitle || 'Inventory & Sales System'
+      
+      // Generate avatar with company initial if no logo
+      if (!settings.company_logo_url) {
+        companyLogo.value = ''
+      } else {
+        companyLogo.value = settings.company_logo_url
+      }
     }
   } catch (e) {
     // If it fails, keep defaults
