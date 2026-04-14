@@ -34,6 +34,12 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute("INSERT INTO schema_migrations (version) VALUES (2)", [])?;
     }
 
+    // Add migration v3 to seed products
+    if current_version < 3 {
+        migration_v3(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (3)", [])?;
+    }
+
     Ok(())
 }
 
@@ -241,5 +247,55 @@ fn migration_v2(conn: &Connection) -> Result<()> {
         password_hash.replace("'", "''")
     );
     conn.execute(&query, [])?;
+    Ok(())
+}
+
+// Migration v3: Seed products across categories
+fn migration_v3(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO products (category_id, sku, name, description, unit, cost_price, selling_price, quantity, reorder_level) VALUES
+        (1, 'LED-12W-DL', 'LED Bulb 12W Daylight', 'Energy-efficient 12W LED bulb with daylight spectrum', 'piece', 25.00, 78.00, 45, 10),
+        (1, 'LED-15W-WW', 'LED Bulb 15W Warm White', 'Warm white 15W LED bulb for ambient lighting', 'piece', 28.00, 89.00, 38, 10),
+        (1, 'LED-9W-CW', 'LED Bulb 9W Cool White', 'Compact 9W cool white LED for task lighting', 'piece', 20.00, 65.00, 52, 10),
+        (1, 'LED-20W-DIM', 'LED Bulb 20W Dimmable', 'Dimmable 20W LED for flexible lighting control', 'piece', 35.00, 120.00, 28, 10),
+        (1, 'LED-5W-RGB', 'LED Bulb 5W RGB', 'Multicolor RGB LED bulb with 16 million colors', 'piece', 40.00, 145.00, 15, 10),
+        (2, 'FL-T8-36W', 'Fluorescent Tube 36W T8', 'Standard 36W T8 fluorescent tube 120cm', 'piece', 15.00, 45.00, 60, 15),
+        (2, 'FL-T5-28W', 'Fluorescent Tube 28W T5', 'Compact 28W T5 fluorescent tube 115cm', 'piece', 18.00, 52.00, 40, 15),
+        (2, 'FL-CFL-23W', 'CFL Bulb 23W', 'Compact fluorescent lamp 23W equivalent 100W', 'piece', 12.00, 38.00, 75, 15),
+        (2, 'FL-CFL-15W', 'CFL Bulb 15W', 'Compact fluorescent lamp 15W', 'piece', 8.00, 25.00, 85, 15),
+        (2, 'FL-BALLAST', 'Electronic Ballast', 'Electronic ballast for fluorescent fixtures', 'piece', 45.00, 130.00, 20, 5),
+        (3, 'DL-3INCH-LED', '3 Inch LED Downlight', 'Recessed 3\" LED downlight 8W daylight', 'piece', 50.00, 165.00, 25, 8),
+        (3, 'DL-4INCH-LED', '4 Inch LED Downlight', 'Recessed 4\" LED downlight 12W warm white', 'piece', 65.00, 210.00, 18, 8),
+        (3, 'DL-SURFACE-LED', 'Surface Mount Downlight', 'Surface mounted LED downlight 10W adjustable', 'piece', 55.00, 185.00, 22, 8),
+        (3, 'DL-GIMBAL-3IN', 'Gimbal 3 Inch Downlight', 'Gimbal recessed downlight 3\" adjustable angle', 'piece', 70.00, 225.00, 15, 8),
+        (3, 'DL-PANEL-300', 'LED Panel Light 30x30', 'Square LED panel light 30cm x 30cm 18W', 'piece', 75.00, 245.00, 12, 8),
+        (4, 'SL-30W-LED', 'LED Street Light 30W', 'Energy-efficient 30W LED street light IP65', 'piece', 180.00, 580.00, 8, 3),
+        (4, 'SL-50W-LED', 'LED Street Light 50W', 'High-power 50W LED street light IP67', 'piece', 280.00, 895.00, 5, 3),
+        (4, 'SL-100W-HALIDE', 'Metal Halide 100W', 'Traditional 100W metal halide street light', 'piece', 120.00, 385.00, 12, 3),
+        (4, 'SL-POLE-4M', 'Steel Pole 4 Meter', '4 meter galvanized steel lighting pole', 'piece', 450.00, 1350.00, 4, 2),
+        (4, 'SL-BRACKET', 'Light Bracket', 'Adjustable mounting bracket for street lights', 'piece', 25.00, 75.00, 30, 10),
+        (5, 'FL-100W-LED', 'LED Floodlight 100W', 'High-intensity 100W LED floodlight IP67', 'piece', 150.00, 495.00, 10, 5),
+        (5, 'FL-150W-LED', 'LED Floodlight 150W', 'Professional 150W LED floodlight IP68', 'piece', 220.00, 720.00, 6, 5),
+        (5, 'FL-300W-HALIDE', 'Metal Halide Floodlight 300W', '300W metal halide high-power floodlight', 'piece', 200.00, 650.00, 8, 3),
+        (5, 'FL-STAND', 'Floodlight Stand', 'Adjustable tripod stand for floodlights', 'piece', 40.00, 130.00, 15, 5),
+        (5, 'FL-DIFFUSER', 'Floodlight Diffuser', 'Optical diffuser for even light distribution', 'piece', 20.00, 65.00, 25, 10),
+        (6, 'DEC-STRING-LIGHT', 'String Lights 10M', 'Decorative string lights 10 meters 20 bulbs', 'piece', 35.00, 115.00, 20, 5),
+        (6, 'DEC-NEON-FLEX', 'Neon Flex Rope 5M', 'Flexible neon rope light 5 meters', 'piece', 80.00, 260.00, 10, 3),
+        (6, 'DEC-SPOT-RGB', 'RGB Spot Light', 'Adjustable RGB accent light for decoration', 'piece', 30.00, 100.00, 35, 10),
+        (6, 'DEC-CHANDELIER', 'Modern Chandelier', 'Contemporary chandelier with LED compatibility', 'piece', 200.00, 650.00, 5, 2),
+        (6, 'DEC-PENDANT', 'Pendant Light', 'Stylish pendant light fixture', 'piece', 60.00, 195.00, 12, 5),
+        (7, 'ACC-SWITCH-1G', 'Single Gang Switch', 'Standard single gang light switch', 'piece', 3.00, 12.00, 200, 30),
+        (7, 'ACC-SWITCH-2G', 'Double Gang Switch', 'Double gang light switch plate', 'piece', 5.00, 18.00, 150, 30),
+        (7, 'ACC-OUTLET-1G', 'Single Gang Outlet', 'Standard 15A electrical outlet', 'piece', 4.00, 15.00, 180, 30),
+        (7, 'ACC-OUTLET-2G', 'Double Gang Outlet', 'Dual outlet 15A electrical outlet', 'piece', 6.00, 22.00, 120, 20),
+        (7, 'ACC-SOCKET-E27', 'E27 Socket', 'Ceramic E27 bulb socket', 'piece', 2.00, 8.00, 300, 50),
+        (7, 'ACC-SOCKET-B22', 'B22 Socket', 'Standard B22 bulb socket', 'piece', 2.50, 9.00, 250, 50),
+        (7, 'ACC-WIRE-1MM', 'Electrical Wire 1.0mm 100M', '100 meters of 1.0mm electrical wire', 'roll', 45.00, 145.00, 35, 10),
+        (7, 'ACC-WIRE-1.5MM', 'Electrical Wire 1.5mm 100M', '100 meters of 1.5mm electrical wire', 'roll', 65.00, 210.00, 28, 10),
+        (7, 'ACC-JUNCTION-BOX', 'Junction Box', 'Electrical junction box 100x100mm', 'piece', 8.00, 28.00, 100, 20),
+        (7, 'ACC-CONDUIT-PVC', 'PVC Conduit Pipe', 'PVC conduit pipe for wire protection 100M', 'roll', 35.00, 115.00, 25, 8),
+        (7, 'ACC-BREAKER-16A', 'Circuit Breaker 16A', '16A automatic circuit breaker', 'piece', 12.00, 42.00, 80, 20),
+        (7, 'ACC-SURGE-PROTECT', 'Surge Protector', '4-outlet surge protection power strip', 'piece', 15.00, 50.00, 90, 15);"
+    )?;
     Ok(())
 }
