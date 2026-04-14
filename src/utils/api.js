@@ -118,3 +118,23 @@ export const settingsApi = {
   getSettings: (token) => invoke('get_settings', { token }),
   updateSettings: (token, settings) => invoke('update_settings', { token, settings }),
 }
+
+// Pharmacy
+export const pharmacyApi = {
+  // Patients
+  getPatients: (token) => invoke('pharmacy/patients', { token }),
+  createPatient: (token, request) => invoke('pharmacy/create-patient', { token, request }),
+  updatePatient: (token, request) => invoke('pharmacy/update-patient', { token, request }),
+  
+  // Prescriptions
+  getPrescriptions: (token) => invoke('pharmacy/prescriptions', { token }),
+  getPrescriptionByNumber: (token, prescription_number) => invoke('pharmacy/prescriptions/by-number', { token, prescription_number }),
+  createPrescription: (token, request) => invoke('pharmacy/create-prescription', { token, request }),
+  
+  // Controlled Substances
+  logControlledSubstance: (token, request) => invoke('pharmacy/controlled-log', { token, request }),
+  getControlledLogs: (token) => invoke('pharmacy/controlled-logs', { token }),
+  
+  // Alerts
+  getExpiryAlerts: (token) => invoke('pharmacy/expiry-alerts', { token }),
+}
