@@ -1,5 +1,5 @@
 <template>
-  <Modal v-model="modelValue" :title="title" width="400px">
+  <Modal :modelValue="modelValue" @update:modelValue="$emit('update:modelValue', $event)" :title="title" width="400px">
     <p class="text-sm text-gray-600">{{ message }}</p>
     <template #footer>
       <button class="btn-secondary" @click="$emit('update:modelValue', false)">Cancel</button>

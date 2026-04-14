@@ -4,7 +4,7 @@
 #  Usage:
 #    ./setup.sh              → Desktop app (Tauri) — default
 #    ./setup.sh desktop      → Desktop app (Tauri)
-#    ./setup.sh web          → Web server mode (Node.js serve)
+#    ./setup.sh web          → Web server mode (Node.js serve + backend)
 #    ./setup.sh dev          → Development mode (hot-reload)
 #    ./setup.sh dev-web      → Development web mode
 # =============================================================================
@@ -135,7 +135,7 @@ setup_desktop() {
   install_node_deps
 
   step "Building desktop application (this may take a few minutes on first build)"
-  npm run tauri build
+  npm run tauri:build
 
   info "Build complete!"
   echo ""
@@ -190,6 +190,28 @@ setup_web() {
   npm run build
   info "Frontend built to dist/"
 
+  # Check if Docker is available for backend
+  if command -v docker &>/dev/null && command -v docker-compose &>/dev/null; then
+    step "Starting backend server with Docker Compose…"
+    docker-compose up -d
+    info "Backend started (waiting 5 seconds for initialization)"
+    sleep 5
+    
+    # Verify backend is running
+    if curl -s http://localhost:3000/health >/dev/null 2>&1; then
+      info "Backend health check passed"
+    else
+      warning "Backend health check failed - it may still be starting"
+    fi
+  else
+    warning "Docker not found - backend will not be started"
+    warning "The web app requires the Rust backend to be running on http://localhost:3000"
+    echo ""
+    echo "  To start the backend, use:"
+    echo "    docker-compose up"
+    echo ""
+  fi
+
   # Install serve if not available
   if ! command -v serve &>/dev/null; then
     step "Installing 'serve' for static file serving"
@@ -205,9 +227,7 @@ setup_web() {
   echo "  Access the app at: http://localhost:${PORT}"
   echo "  Press Ctrl+C to stop"
   echo ""
-  echo "  ⚠️  Note: Web mode uses a static file server."
-  echo "     For a full backend, the Tauri desktop build is recommended."
-  echo ""
+  echo "  Backend API: http://localhost:3000"
   echo "  Default login: admin / Admin@123"
   echo ""
 
@@ -226,11 +246,34 @@ setup_dev_web() {
 
   install_node_deps
 
+  # Check if Docker is available for backend
+  if command -v docker &>/dev/null && command -v docker-compose &>/dev/null; then
+    step "Starting backend server with Docker Compose…"
+    docker-compose up -d
+    info "Backend started (waiting 5 seconds for initialization)"
+    sleep 5
+    
+    # Verify backend is running
+    if curl -s http://localhost:3000/health >/dev/null 2>&1; then
+      info "Backend health check passed"
+    else
+      warning "Backend health check failed - it may still be starting"
+    fi
+  else
+    warning "Docker not found - backend will not be started"
+    warning "The web app requires the Rust backend to be running on http://localhost:3000"
+    echo ""
+    echo "  To start the backend, use:"
+    echo "    docker-compose up"
+    echo ""
+  fi
+
   echo ""
   echo -e "  ${GREEN}${BOLD}Starting web development server…${RESET}"
   echo "  • URL: http://localhost:1420"
   echo "  • Hot-reload enabled"
-  echo "  • Note: Backend calls will need a running API server"
+  echo "  • Backend API: http://localhost:3000"
+  echo "  • Press Ctrl+C to stop"
   echo ""
 
   npm run dev

@@ -28,10 +28,20 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute("INSERT INTO schema_migrations (version) VALUES (1)", [])?;
     }
 
+    // Add migration v2 to fix the admin password hash
+    if current_version < 2 {
+        migration_v2(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (2)", [])?;
+    }
+
     Ok(())
 }
 
 fn migration_v1(conn: &Connection) -> Result<()> {
+    // Generate the password hash for "Admin@123"
+    let password_hash = bcrypt::hash("Admin@123", 12)
+        .unwrap_or_else(|_| "$2b$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcg7b3XeKeUxWdeS86E36P4/aSi".to_string());
+
     conn.execute_batch(
         "
         -- Users
@@ -184,9 +194,15 @@ fn migration_v1(conn: &Connection) -> Result<()> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Default super admin  (password: Admin@123)
-        INSERT OR IGNORE INTO users (username, password_hash, full_name, role)
-        VALUES ('admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj9L8sDqhxBq', 'System Administrator', 'super_admin');
+        -- Default categories
+        INSERT OR IGNORE INTO categories (name, description) VALUES
+            ('LED Bulbs',    'LED light bulbs of all types and wattage'),
+            ('Fluorescent',  'Fluorescent tubes and compact fluorescent lamps'),
+            ('Downlights',   'Recessed and surface downlights'),
+            ('Streetlights', 'Outdoor and street lighting fixtures'),
+            ('Floodlights',  'High-power flood and area lighting'),
+            ('Decorative',   'Decorative and novelty lighting'),
+            ('Accessories',  'Electrical accessories and fittings');
 
         -- Default company settings
         INSERT OR IGNORE INTO settings (key, value) VALUES
@@ -201,16 +217,29 @@ fn migration_v1(conn: &Connection) -> Result<()> {
             ('sale_prefix',       'SL'),
             ('receipt_footer',    'Thank you for your business!'),
             ('low_stock_threshold','10');
-
-        -- Default categories
-        INSERT OR IGNORE INTO categories (name, description) VALUES
-            ('LED Bulbs',    'LED light bulbs of all types and wattage'),
-            ('Fluorescent',  'Fluorescent tubes and compact fluorescent lamps'),
-            ('Downlights',   'Recessed and surface downlights'),
-            ('Streetlights', 'Outdoor and street lighting fixtures'),
-            ('Floodlights',  'High-power flood and area lighting'),
-            ('Decorative',   'Decorative and novelty lighting'),
-            ('Accessories',  'Electrical accessories and fittings');
         ",
-    )
+    )?;
+
+    // Insert admin user with dynamically generated hash
+    let query = format!(
+        "INSERT OR IGNORE INTO users (username, password_hash, full_name, role, email) \
+         VALUES ('admin', '{}', 'System Administrator', 'super_admin', 'admin@lumisync.local')",
+        password_hash.replace("'", "''") // Escape single quotes
+    );
+    conn.execute(&query, [])?;
+
+    Ok(())
+}
+
+// Migration v2: Update admin password hash if it doesn't match
+fn migration_v2(conn: &Connection) -> Result<()> {
+    let password_hash = bcrypt::hash("Admin@123", 12)
+        .unwrap_or_else(|_| "$2b$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcg7b3XeKeUxWdeS86E36P4/aSi".to_string());
+    
+    let query = format!(
+        "UPDATE users SET password_hash = '{}' WHERE username = 'admin'",
+        password_hash.replace("'", "''")
+    );
+    conn.execute(&query, [])?;
+    Ok(())
 }

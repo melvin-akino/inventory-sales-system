@@ -34,112 +34,226 @@
       </div>
     </div>
 
-    <!-- Cart Panel -->
-    <div class="w-96 flex flex-col gap-3 flex-shrink-0">
-      <!-- Customer -->
-      <div class="card flex-shrink-0">
-        <label class="label">Customer (optional)</label>
-        <div class="flex gap-2">
-          <select v-model="selectedCustomer" class="input flex-1">
-            <option :value="null">Walk-in Customer</option>
-            <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
-          </select>
+    <!-- Cart Panel - IMPROVED -->
+    <div class="w-full lg:w-[500px] flex flex-col gap-3 flex-shrink-0 bg-white rounded-lg shadow-lg">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-4 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+          <h2 class="text-2xl font-bold text-gray-900">Shopping Cart</h2>
+          <button v-if="cart.length" @click="cart = []" class="text-sm text-red-500 hover:text-red-700 font-medium">
+            Clear All
+          </button>
         </div>
+        <p class="text-sm text-gray-500 mt-1">{{ cart.length }} item(s) in cart</p>
       </div>
 
-      <!-- Cart Items -->
-      <div class="card flex-1 overflow-y-auto">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between">
-          Cart
-          <button v-if="cart.length" @click="cart = []" class="text-xs text-red-500 hover:text-red-700">Clear</button>
-        </h3>
-        <div v-if="!cart.length" class="text-center py-8 text-gray-400 text-sm">Cart is empty</div>
-        <div class="space-y-2">
-          <div v-for="(item, i) in cart" :key="i" class="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-            <div class="flex-1 min-w-0">
-              <p class="text-xs font-medium text-gray-900 truncate">{{ item.name }}</p>
-              <p class="text-xs text-gray-400">{{ formatCurrency(item.unit_price) }} × {{ item.quantity }}</p>
-              <div class="flex items-center gap-1 mt-1">
-                <span class="text-xs text-gray-500">Disc:</span>
-                <input v-model.number="item.discount_percent" type="number" min="0" max="100" step="0.5"
-                  class="w-14 text-xs border border-gray-200 rounded px-1 py-0.5" />
-                <span class="text-xs text-gray-500">%</span>
+      <!-- Customer Selection -->
+      <div class="px-6">
+        <label class="label text-sm font-semibold text-gray-700">Customer (Optional)</label>
+        <select v-model="selectedCustomer" class="input text-base">
+          <option :value="null">Walk-in Customer</option>
+          <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+
+      <!-- Cart Items - LARGER AND MORE VISIBLE -->
+      <div class="flex-1 overflow-y-auto px-6">
+        <div v-if="!cart.length" class="flex flex-col items-center justify-center h-full text-gray-400">
+          <svg class="w-16 h-16 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 8m10 0l2-8m0 0h-4m4 0l2 8M9 21v-2M15 21v-2" />
+          </svg>
+          <p class="text-lg font-medium">Cart is empty</p>
+          <p class="text-sm">Add products to get started</p>
+        </div>
+
+        <div class="space-y-3">
+          <div
+            v-for="(item, i) in cart"
+            :key="i"
+            class="bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+          >
+            <!-- Product Info -->
+            <div class="flex justify-between items-start mb-3">
+              <div class="flex-1">
+                <p class="font-semibold text-gray-900 text-base">{{ item.name }}</p>
+                <p class="text-sm text-gray-500 mt-0.5">{{ formatCurrency(item.unit_price) }} each</p>
+              </div>
+              <button
+                @click="removeItem(i)"
+                class="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-1 transition-colors"
+                title="Remove item"
+              >
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Quantity Controls - LARGER -->
+            <div class="flex items-center gap-3 mb-3">
+              <button
+                @click="decreaseQty(i)"
+                class="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 font-bold text-lg hover:bg-gray-300 transition-colors"
+              >
+                −
+              </button>
+              <input
+                v-model.number="item.quantity"
+                type="number"
+                min="1"
+                :max="item.max_qty"
+                @change="validateQty(i)"
+                class="w-16 text-center text-lg font-bold border-2 border-gray-300 rounded-lg py-2"
+              />
+              <button
+                @click="increaseQty(i)"
+                class="w-10 h-10 rounded-lg bg-primary-500 text-white font-bold text-lg hover:bg-primary-600 transition-colors"
+              >
+                +
+              </button>
+              <span class="text-sm text-gray-500 ml-2">of {{ item.max_qty }} available</span>
+            </div>
+
+            <!-- Discount -->
+            <div class="mb-3">
+              <label class="text-sm text-gray-600 font-medium">Discount</label>
+              <div class="flex gap-2 mt-1">
+                <input
+                  v-model.number="item.discount_percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  class="flex-1 text-sm border-2 border-gray-300 rounded-lg px-3 py-2 font-medium"
+                  placeholder="0"
+                />
+                <span class="text-sm font-bold text-gray-700 py-2">%</span>
               </div>
             </div>
-            <div class="flex flex-col items-end gap-1">
-              <span class="text-sm font-semibold text-primary-700">{{ formatCurrency(itemTotal(item)) }}</span>
-              <div class="flex items-center gap-1">
-                <button @click="decreaseQty(i)" class="w-6 h-6 rounded bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300">−</button>
-                <span class="w-6 text-center text-xs font-semibold">{{ item.quantity }}</span>
-                <button @click="increaseQty(i)" class="w-6 h-6 rounded bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300">+</button>
-                <button @click="removeItem(i)" class="w-6 h-6 rounded bg-red-100 text-red-600 text-xs hover:bg-red-200">✕</button>
-              </div>
+
+            <!-- Item Total -->
+            <div class="flex justify-between items-center bg-white rounded-lg p-3 border-2 border-primary-200">
+              <span class="text-sm font-semibold text-gray-600">Subtotal</span>
+              <span class="text-lg font-bold text-primary-700">{{ formatCurrency(itemTotal(item)) }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Totals & Payment -->
-      <div class="card flex-shrink-0 space-y-3">
-        <div class="flex justify-between text-sm">
-          <span class="text-gray-500">Subtotal</span>
-          <span class="font-medium">{{ formatCurrency(subtotal) }}</span>
-        </div>
-        <div class="flex justify-between text-sm items-center">
-          <span class="text-gray-500">Discount (₱)</span>
-          <input v-model.number="extraDiscount" type="number" min="0" step="0.01" class="w-28 text-sm text-right border border-gray-200 rounded px-2 py-1" />
-        </div>
-        <div class="flex justify-between text-sm">
-          <span class="text-gray-500">VAT ({{ vatRate }}%)</span>
-          <span class="font-medium">{{ formatCurrency(vatAmount) }}</span>
-        </div>
-        <div class="flex justify-between text-base font-bold border-t pt-2">
-          <span>TOTAL</span>
-          <span class="text-primary-700">{{ formatCurrency(grandTotal) }}</span>
+      <!-- Divider -->
+      <div class="border-t border-gray-200"></div>
+
+      <!-- Totals Summary -->
+      <div class="px-6 py-4 space-y-3 bg-gray-50 rounded-b-lg">
+        <div class="space-y-2">
+          <div class="flex justify-between text-base">
+            <span class="text-gray-600">Subtotal</span>
+            <span class="font-semibold text-gray-900">{{ formatCurrency(subtotal) }}</span>
+          </div>
+
+          <div class="flex justify-between text-base items-center">
+            <span class="text-gray-600">Discount</span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-500">₱</span>
+              <input
+                v-model.number="extraDiscount"
+                type="number"
+                min="0"
+                step="0.01"
+                class="w-32 text-right text-base font-semibold border-2 border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-between text-base">
+            <span class="text-gray-600">VAT ({{ vatRate }}%)</span>
+            <span class="font-semibold text-gray-900">{{ formatCurrency(vatAmount) }}</span>
+          </div>
         </div>
 
+        <!-- Grand Total -->
+        <div class="bg-white rounded-lg p-4 border-2 border-primary-300">
+          <div class="flex justify-between items-center">
+            <span class="text-lg font-bold text-gray-900">TOTAL</span>
+            <span class="text-3xl font-bold text-primary-700">{{ formatCurrency(grandTotal) }}</span>
+          </div>
+        </div>
+
+        <!-- Payment Method -->
         <div>
-          <label class="label">Payment Method</label>
-          <select v-model="paymentMethod" class="input">
+          <label class="label text-sm font-semibold text-gray-700">Payment Method</label>
+          <select v-model="paymentMethod" class="input text-base">
             <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
         </div>
 
+        <!-- Amount Paid -->
         <div>
-          <label class="label">Amount Paid (₱)</label>
-          <input v-model.number="amountPaid" type="number" min="0" step="0.01" class="input text-lg font-bold" />
+          <label class="label text-sm font-semibold text-gray-700">Amount Paid (₱)</label>
+          <input
+            v-model.number="amountPaid"
+            type="number"
+            min="0"
+            step="0.01"
+            class="input text-2xl font-bold text-primary-700 text-center"
+          />
         </div>
 
-        <div v-if="amountPaid >= grandTotal" class="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
-          <span class="text-green-700 font-medium">Change</span>
-          <span class="font-bold text-green-700">{{ formatCurrency(change) }}</span>
+        <!-- Change Display -->
+        <div v-if="amountPaid >= grandTotal" class="bg-green-50 rounded-lg p-4 border-2 border-green-300">
+          <div class="flex justify-between items-center">
+            <span class="text-lg font-semibold text-green-700">Change</span>
+            <span class="text-2xl font-bold text-green-700">{{ formatCurrency(change) }}</span>
+          </div>
         </div>
 
-        <div v-if="saleError" class="text-xs text-red-600">{{ saleError }}</div>
+        <div v-if="saleError" class="text-sm text-red-600 bg-red-50 rounded-lg p-3 font-medium">
+          {{ saleError }}
+        </div>
 
+        <!-- Complete Sale Button -->
         <button
-          class="btn-success w-full py-3 text-base font-bold"
+          class="btn-success w-full py-4 text-lg font-bold transition-all"
           :disabled="!cart.length || amountPaid < grandTotal || processing"
           @click="processSale"
         >
-          {{ processing ? 'Processing…' : '✓ Complete Sale' }}
+          {{ processing ? 'Processing…' : `✓ Complete Sale` }}
         </button>
       </div>
     </div>
 
     <!-- Receipt Modal -->
-    <Modal v-model="showReceipt" title="Sale Complete" width="420px">
-      <div class="text-center mb-4">
-        <div class="text-4xl mb-2">✅</div>
-        <p class="text-lg font-bold text-gray-900">Sale Completed!</p>
-        <p class="text-sm text-gray-500">{{ lastSale?.sale_number }}</p>
+    <Modal v-model="showReceipt" title="Sale Complete" width="500px">
+      <div class="text-center mb-6">
+        <div class="text-6xl mb-3">✅</div>
+        <p class="text-2xl font-bold text-gray-900">Sale Completed!</p>
+        <p class="text-base text-gray-500 mt-2">{{ lastSale?.sale_number }}</p>
       </div>
-      <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-        <div class="flex justify-between"><span class="text-gray-500">Total</span><span class="font-bold">{{ formatCurrency(lastSale?.total_amount) }}</span></div>
-        <div class="flex justify-between"><span class="text-gray-500">Amount Paid</span><span>{{ formatCurrency(lastSale?.amount_paid) }}</span></div>
-        <div class="flex justify-between"><span class="text-gray-500">Change</span><span class="font-bold text-green-600">{{ formatCurrency(lastSale?.change_amount) }}</span></div>
-        <div class="flex justify-between"><span class="text-gray-500">Payment</span><span>{{ paymentLabel(lastSale?.payment_method) }}</span></div>
-        <div class="flex justify-between border-t pt-2"><span class="text-gray-500">OR/Invoice</span><span class="font-mono text-xs">Auto-generated</span></div>
+      <div class="bg-gray-50 rounded-lg p-6 space-y-3 text-base">
+        <div class="flex justify-between">
+          <span class="text-gray-600">Total</span>
+          <span class="font-bold text-lg">{{ formatCurrency(lastSale?.total_amount) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">Amount Paid</span>
+          <span class="font-semibold">{{ formatCurrency(lastSale?.amount_paid) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">Change</span>
+          <span class="font-bold text-green-600 text-lg">{{ formatCurrency(lastSale?.change_amount) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">Payment Method</span>
+          <span class="font-semibold">{{ paymentLabel(lastSale?.payment_method) }}</span>
+        </div>
+        <div class="flex justify-between border-t pt-3">
+          <span class="text-gray-600">OR/Invoice</span>
+          <span class="font-mono text-sm font-semibold">Auto-generated</span>
+        </div>
       </div>
       <template #footer>
         <button class="btn-secondary" @click="showReceipt = false; newSale()">New Sale</button>
@@ -193,7 +307,14 @@ function addToCart(p) {
     if (existing.quantity < p.quantity) existing.quantity++
     else appStore.notify(`Only ${p.quantity} in stock`, 'warning')
   } else {
-    cart.value.push({ product_id: p.id, name: p.name, unit_price: p.selling_price, quantity: 1, discount_percent: 0, max_qty: p.quantity })
+    cart.value.push({
+      product_id: p.id,
+      name: p.name,
+      unit_price: p.selling_price,
+      quantity: 1,
+      discount_percent: 0,
+      max_qty: p.quantity,
+    })
   }
   if (!amountPaid.value || amountPaid.value < grandTotal.value) {
     amountPaid.value = Math.ceil(grandTotal.value)
@@ -211,7 +332,18 @@ function decreaseQty(i) {
   else removeItem(i)
 }
 
-function removeItem(i) { cart.value.splice(i, 1) }
+function validateQty(i) {
+  const item = cart.value[i]
+  if (item.quantity < 1) item.quantity = 1
+  if (item.quantity > item.max_qty) {
+    item.quantity = item.max_qty
+    appStore.notify(`Maximum ${item.max_qty} available`, 'warning')
+  }
+}
+
+function removeItem(i) {
+  cart.value.splice(i, 1)
+}
 
 async function searchProducts() {
   try {
@@ -265,6 +397,10 @@ function printReceipt() {
 onMounted(async () => {
   const settings = await appStore.loadSettings()
   vatRate.value = parseFloat(appStore.getSetting('vat_rate', '12'))
-  await Promise.all([searchProducts(), categoriesApi.getCategories(auth.token).then(c => categories.value = c), customersApi.getCustomers(auth.token).then(c => customers.value = c)])
+  await Promise.all([
+    searchProducts(),
+    categoriesApi.getCategories(auth.token).then((c) => (categories.value = c)),
+    customersApi.getCustomers(auth.token).then((c) => (customers.value = c)),
+  ])
 })
 </script>

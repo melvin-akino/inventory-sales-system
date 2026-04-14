@@ -17,6 +17,13 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: 1420,
       strictPort: true,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
+      },
     },
     envPrefix: ['VITE_', 'TAURI_'],
     build: {
@@ -28,6 +35,7 @@ export default defineConfig(({ command, mode }) => {
     },
     define: {
       __IS_TAURI__: isTauri,
+      __API_URL__: isTauri ? '"http://localhost:3000"' : '"/api"',
     },
   }
 })

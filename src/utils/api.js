@@ -6,6 +6,15 @@
 
 const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
 
+// Determine API base URL
+let API_BASE_URL = '/api'
+if (typeof window !== 'undefined') {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // In development, use the backend directly
+    API_BASE_URL = 'http://localhost:3000'
+  }
+}
+
 async function invoke(command, args = {}) {
   if (isTauri) {
     const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri')
@@ -15,7 +24,12 @@ async function invoke(command, args = {}) {
   // Web mode: camelCase command → snake_case HTTP path
   const path = command.replace(/_/g, '-')
   const token = localStorage.getItem('auth_token')
-  const response = await fetch(`/api/${path}`, {
+  
+  // Ensure path doesn't have leading slash for concatenation
+  const pathStr = path.startsWith('/') ? path : `/${path}`
+  const url = `${API_BASE_URL}${pathStr}`
+  
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
