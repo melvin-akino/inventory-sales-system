@@ -1,24 +1,10 @@
 /**
  * Universal API client — bridges Tauri IPC (desktop) and REST HTTP (web).
  * In desktop mode, window.__TAURI__ is defined and we invoke Tauri commands.
- * In web mode, we POST to the backend REST API.
+ * In web mode, we POST to the backend REST API via /api proxy.
  */
 
 const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
-
-// Determine API base URL
-let API_BASE_URL = '/api'
-if (typeof window !== 'undefined' && !isTauri) {
-  // In web mode running in browser
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    // Local development: use direct localhost
-    API_BASE_URL = 'http://localhost:3000'
-  } else if (window.location.hostname === 'lumisync-frontend' || window.location.hostname.includes('docker')) {
-    // Running in Docker: use internal network
-    API_BASE_URL = 'http://lumisync-backend:3000'
-  }
-  // Otherwise use /api proxy (default for production)
-}
 
 async function invoke(command, args = {}) {
   if (isTauri) {
@@ -26,13 +12,14 @@ async function invoke(command, args = {}) {
     return tauriInvoke(command, args)
   }
 
-  // Web mode: camelCase command → snake_case HTTP path
+  // Web mode: Use /api proxy (Nginx will forward to backend)
+  // camelCase command → snake_case HTTP path
   const path = command.replace(/_/g, '-')
   const token = localStorage.getItem('auth_token')
   
   // Ensure path doesn't have leading slash for concatenation
   const pathStr = path.startsWith('/') ? path : `/${path}`
-  const url = `${API_BASE_URL}${pathStr}`
+  const url = `/api${pathStr}`
   
   const response = await fetch(url, {
     method: 'POST',
