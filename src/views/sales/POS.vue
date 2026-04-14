@@ -1,406 +1,574 @@
 <template>
-  <div class="flex gap-4 h-full" style="height: calc(100vh - 120px)">
-    <!-- Product Search Panel -->
-    <div class="flex-1 flex flex-col gap-4 overflow-hidden">
-      <div class="card flex-shrink-0">
-        <div class="flex gap-3">
-          <input v-model="search" class="input flex-1" placeholder="🔍 Search product name or SKU…" @input="searchProducts" />
-          <select v-model="selectedCategory" class="input w-44" @change="searchProducts">
-            <option :value="null">All Categories</option>
-            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-          </select>
+  <div class="min-h-screen bg-gray-100">
+    <!-- Top Header -->
+    <div class="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+      <div class="px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Point of Sale</h1>
+          <p class="text-sm text-gray-500">{{ new Date().toLocaleDateString() }}</p>
         </div>
-      </div>
-
-      <div class="flex-1 overflow-y-auto">
-        <div class="grid grid-cols-2 xl:grid-cols-3 gap-3">
-          <button
-            v-for="p in products"
-            :key="p.id"
-            @click="addToCart(p)"
-            class="card text-left hover:border-primary-300 hover:shadow-md transition-all cursor-pointer border-2"
-            :class="p.quantity === 0 ? 'opacity-50 cursor-not-allowed' : 'border-transparent'"
-            :disabled="p.quantity === 0"
-          >
-            <p class="font-medium text-sm text-gray-900 leading-tight">{{ p.name }}</p>
-            <p class="text-xs text-gray-400 mt-0.5">{{ p.sku }} · {{ p.category_name }}</p>
-            <div class="flex items-center justify-between mt-2">
-              <span class="text-sm font-bold text-primary-700">{{ formatCurrency(p.selling_price) }}</span>
-              <span class="text-xs badge" :class="stockStatusColor(p.quantity, p.reorder_level)">{{ p.quantity }} left</span>
-            </div>
-          </button>
-          <div v-if="!products.length" class="col-span-3 text-center py-12 text-gray-400">No products found</div>
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <p class="text-sm font-semibold text-gray-900">{{ authStore.user?.username || 'User' }}</p>
+            <p class="text-xs text-gray-500">{{ authStore.user?.role || 'Cashier' }}</p>
+          </div>
+          <img :src="userAvatar" class="w-10 h-10 rounded-full bg-primary-500" />
         </div>
       </div>
     </div>
 
-    <!-- Cart Panel - IMPROVED -->
-    <div class="w-full lg:w-[500px] flex flex-col gap-3 flex-shrink-0 bg-white rounded-lg shadow-lg">
-      <!-- Header -->
-      <div class="px-6 pt-6 pb-4 border-b border-gray-200">
-        <div class="flex items-center justify-between">
-          <h2 class="text-2xl font-bold text-gray-900">Shopping Cart</h2>
-          <button v-if="cart.length" @click="cart = []" class="text-sm text-red-500 hover:text-red-700 font-medium">
-            Clear All
-          </button>
+    <div class="flex h-[calc(100vh-90px)]">
+      <!-- Left Sidebar - Categories & Filters -->
+      <div class="w-64 bg-white border-r border-gray-200 overflow-y-auto">
+        <div class="p-4">
+          <!-- Search Bar -->
+          <div class="mb-4">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search products..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <!-- Categories -->
+          <div class="mb-6">
+            <h3 class="text-sm font-semibold text-gray-900 mb-3">Categories</h3>
+            <button
+              @click="selectedCategory = null"
+              :class="[
+                'w-full text-left px-3 py-2 rounded-lg text-sm mb-2 transition-colors',
+                selectedCategory === null
+                  ? 'bg-primary-100 text-primary-900 font-medium'
+                  : 'text-gray-700 hover:bg-gray-100'
+              ]"
+            >
+              All Products
+            </button>
+            <button
+              v-for="cat in categories"
+              :key="cat.id"
+              @click="selectedCategory = cat.id"
+              :class="[
+                'w-full text-left px-3 py-2 rounded-lg text-sm mb-2 transition-colors',
+                selectedCategory === cat.id
+                  ? 'bg-primary-100 text-primary-900 font-medium'
+                  : 'text-gray-700 hover:bg-gray-100'
+              ]"
+            >
+              {{ cat.name }}
+            </button>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="border-t pt-4">
+            <h3 class="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+            <button
+              @click="clearCart"
+              class="w-full px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 mb-2 transition-colors"
+            >
+              Clear Cart
+            </button>
+            <button
+              @click="showCustomer = !showCustomer"
+              class="w-full px-3 py-2 rounded-lg text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+            >
+              {{ showCustomer ? 'Hide' : 'Add' }} Customer
+            </button>
+          </div>
         </div>
-        <p class="text-sm text-gray-500 mt-1">{{ cart.length }} item(s) in cart</p>
       </div>
 
-      <!-- Customer Selection -->
-      <div class="px-6">
-        <label class="label text-sm font-semibold text-gray-700">Customer (Optional)</label>
-        <select v-model="selectedCustomer" class="input text-base">
-          <option :value="null">Walk-in Customer</option>
-          <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
-      </div>
-
-      <!-- Cart Items - LARGER AND MORE VISIBLE -->
-      <div class="flex-1 overflow-y-auto px-6">
-        <div v-if="!cart.length" class="flex flex-col items-center justify-center h-full text-gray-400">
-          <svg class="w-16 h-16 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 8m10 0l2-8m0 0h-4m4 0l2 8M9 21v-2M15 21v-2" />
-          </svg>
-          <p class="text-lg font-medium">Cart is empty</p>
-          <p class="text-sm">Add products to get started</p>
-        </div>
-
-        <div class="space-y-3">
-          <div
-            v-for="(item, i) in cart"
-            :key="i"
-            class="bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
-          >
-            <!-- Product Info -->
-            <div class="flex justify-between items-start mb-3">
+      <!-- Main Content - Products Grid -->
+      <div class="flex-1 overflow-y-auto">
+        <div class="p-6">
+          <!-- Customer Selection (if toggled) -->
+          <div v-if="showCustomer" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div class="flex items-center gap-4">
               <div class="flex-1">
-                <p class="font-semibold text-gray-900 text-base">{{ item.name }}</p>
-                <p class="text-sm text-gray-500 mt-0.5">{{ formatCurrency(item.unit_price) }} each</p>
-              </div>
-              <button
-                @click="removeItem(i)"
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-1 transition-colors"
-                title="Remove item"
-              >
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fill-rule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Quantity Controls - LARGER -->
-            <div class="flex items-center gap-3 mb-3">
-              <button
-                @click="decreaseQty(i)"
-                class="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 font-bold text-lg hover:bg-gray-300 transition-colors"
-              >
-                −
-              </button>
-              <input
-                v-model.number="item.quantity"
-                type="number"
-                min="1"
-                :max="item.max_qty"
-                @change="validateQty(i)"
-                class="w-16 text-center text-lg font-bold border-2 border-gray-300 rounded-lg py-2"
-              />
-              <button
-                @click="increaseQty(i)"
-                class="w-10 h-10 rounded-lg bg-primary-500 text-white font-bold text-lg hover:bg-primary-600 transition-colors"
-              >
-                +
-              </button>
-              <span class="text-sm text-gray-500 ml-2">of {{ item.max_qty }} available</span>
-            </div>
-
-            <!-- Discount -->
-            <div class="mb-3">
-              <label class="text-sm text-gray-600 font-medium">Discount</label>
-              <div class="flex gap-2 mt-1">
+                <label class="text-sm font-medium text-gray-700 block mb-1">Customer (Optional)</label>
                 <input
-                  v-model.number="item.discount_percent"
+                  v-model="selectedCustomer"
+                  type="text"
+                  placeholder="Search or add new customer..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Products Grid -->
+          <div v-if="filteredProducts.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <button
+              v-for="product in filteredProducts"
+              :key="product.id"
+              @click="addToCart(product)"
+              class="bg-white rounded-xl border-2 border-gray-200 p-3 hover:border-primary-500 hover:shadow-lg transition-all duration-200 text-left"
+            >
+              <!-- Product Image Placeholder -->
+              <div class="w-full aspect-square bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg mb-2 flex items-center justify-center">
+                <span class="text-4xl">📦</span>
+              </div>
+              
+              <!-- Product Info -->
+              <h4 class="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">{{ product.name }}</h4>
+              <p class="text-xs text-gray-500 mb-2">{{ product.sku }}</p>
+              
+              <!-- Price -->
+              <p class="text-lg font-bold text-primary-600 mb-2">₱{{ formatPrice(product.selling_price) }}</p>
+              
+              <!-- Stock -->
+              <p :class="[
+                'text-xs font-medium',
+                product.quantity_on_hand > 0 ? 'text-green-600' : 'text-red-600'
+              ]">
+                {{ product.quantity_on_hand > 0 ? `${product.quantity_on_hand} in stock` : 'Out of stock' }}
+              </p>
+            </button>
+          </div>
+
+          <!-- No Products -->
+          <div v-else class="flex flex-col items-center justify-center py-12">
+            <p class="text-gray-500 text-lg mb-2">No products found</p>
+            <p class="text-sm text-gray-400">Add products in Inventory first</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Sidebar - Shopping Cart -->
+      <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg">
+        <!-- Cart Header -->
+        <div class="bg-gradient-to-r from-primary-500 to-primary-600 text-white px-6 py-4 border-b">
+          <h2 class="text-lg font-bold">🛒 Shopping Cart</h2>
+          <p class="text-sm text-primary-100">{{ cartItems.length }} item(s)</p>
+        </div>
+
+        <!-- Cart Items -->
+        <div class="flex-1 overflow-y-auto">
+          <div v-if="cartItems.length > 0" class="divide-y">
+            <div
+              v-for="(item, idx) in cartItems"
+              :key="idx"
+              class="p-4 hover:bg-gray-50 transition-colors"
+            >
+              <!-- Item Header -->
+              <div class="flex items-start justify-between mb-2">
+                <div>
+                  <h4 class="font-semibold text-gray-900 text-sm">{{ item.product_name }}</h4>
+                  <p class="text-xs text-gray-500">₱{{ formatPrice(item.selling_price) }} each</p>
+                </div>
+                <button
+                  @click="removeFromCart(idx)"
+                  class="text-red-500 hover:text-red-700 text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <!-- Quantity Controls -->
+              <div class="flex items-center gap-2 mb-2">
+                <button
+                  @click="decrementQuantity(idx)"
+                  class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-bold"
+                >
+                  −
+                </button>
+                <input
+                  :value="item.quantity"
+                  @input="updateQuantity(idx, $event.target.value)"
+                  type="number"
+                  class="w-12 text-center px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+                <button
+                  @click="incrementQuantity(idx)"
+                  class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-bold"
+                >
+                  +
+                </button>
+                <span class="text-xs text-gray-500 ml-auto">of {{ item.quantity_available }}</span>
+              </div>
+
+              <!-- Item Total -->
+              <div class="text-right">
+                <p class="text-sm font-bold text-gray-900">₱{{ formatPrice(item.quantity * item.selling_price) }}</p>
+              </div>
+
+              <!-- Discount for Item (Optional) -->
+              <div class="mt-2 pt-2 border-t border-gray-200">
+                <label class="text-xs text-gray-600">Discount: </label>
+                <input
+                  :value="item.discount || 0"
+                  @input="updateDiscount(idx, $event.target.value)"
                   type="number"
                   min="0"
                   max="100"
-                  step="0.5"
-                  class="flex-1 text-sm border-2 border-gray-300 rounded-lg px-3 py-2 font-medium"
-                  placeholder="0"
+                  class="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
                 />
-                <span class="text-sm font-bold text-gray-700 py-2">%</span>
+                <span class="text-xs text-gray-500">%</span>
               </div>
             </div>
+          </div>
 
-            <!-- Item Total -->
-            <div class="flex justify-between items-center bg-white rounded-lg p-3 border-2 border-primary-200">
-              <span class="text-sm font-semibold text-gray-600">Subtotal</span>
-              <span class="text-lg font-bold text-primary-700">{{ formatCurrency(itemTotal(item)) }}</span>
-            </div>
+          <!-- Empty Cart -->
+          <div v-else class="flex flex-col items-center justify-center h-64">
+            <p class="text-gray-400 text-base">🛍️</p>
+            <p class="text-gray-500 text-sm mt-2">Cart is empty</p>
+            <p class="text-xs text-gray-400">Select products to get started</p>
           </div>
         </div>
-      </div>
 
-      <!-- Divider -->
-      <div class="border-t border-gray-200"></div>
-
-      <!-- Totals Summary -->
-      <div class="px-6 py-4 space-y-3 bg-gray-50 rounded-b-lg">
-        <div class="space-y-2">
-          <div class="flex justify-between text-base">
-            <span class="text-gray-600">Subtotal</span>
-            <span class="font-semibold text-gray-900">{{ formatCurrency(subtotal) }}</span>
+        <!-- Cart Summary & Payment -->
+        <div class="border-t bg-gray-50 p-4 space-y-3">
+          <!-- Subtotal -->
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-700">Subtotal:</span>
+            <span class="font-semibold">₱{{ formatPrice(subtotal) }}</span>
           </div>
 
-          <div class="flex justify-between text-base items-center">
-            <span class="text-gray-600">Discount</span>
+          <!-- Discount -->
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-700">Discount:</span>
             <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-500">₱</span>
               <input
-                v-model.number="extraDiscount"
+                v-model.number="discountPercent"
                 type="number"
                 min="0"
-                step="0.01"
-                class="w-32 text-right text-base font-semibold border-2 border-gray-300 rounded-lg px-3 py-2"
+                max="100"
+                class="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+              <span class="text-xs">% or ₱</span>
+              <input
+                v-model.number="discountAmount"
+                type="number"
+                class="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
               />
             </div>
           </div>
+          <p class="text-xs text-gray-500 text-right">-₱{{ formatPrice(totalDiscount) }}</p>
 
-          <div class="flex justify-between text-base">
-            <span class="text-gray-600">VAT ({{ vatRate }}%)</span>
-            <span class="font-semibold text-gray-900">{{ formatCurrency(vatAmount) }}</span>
+          <!-- VAT -->
+          <div class="flex justify-between text-sm border-t pt-3">
+            <span class="text-gray-700">VAT (12%):</span>
+            <span class="font-semibold">₱{{ formatPrice(vatAmount) }}</span>
           </div>
-        </div>
 
-        <!-- Grand Total -->
-        <div class="bg-white rounded-lg p-4 border-2 border-primary-300">
-          <div class="flex justify-between items-center">
-            <span class="text-lg font-bold text-gray-900">TOTAL</span>
-            <span class="text-3xl font-bold text-primary-700">{{ formatCurrency(grandTotal) }}</span>
+          <!-- Total -->
+          <div class="flex justify-between text-lg bg-primary-50 p-3 rounded-lg border-2 border-primary-200">
+            <span class="font-bold text-gray-900">TOTAL:</span>
+            <span class="font-bold text-primary-600">₱{{ formatPrice(totalAmount) }}</span>
           </div>
-        </div>
 
-        <!-- Payment Method -->
-        <div>
-          <label class="label text-sm font-semibold text-gray-700">Payment Method</label>
-          <select v-model="paymentMethod" class="input text-base">
-            <option v-for="m in PAYMENT_METHODS" :key="m.value" :value="m.value">{{ m.label }}</option>
-          </select>
-        </div>
-
-        <!-- Amount Paid -->
-        <div>
-          <label class="label text-sm font-semibold text-gray-700">Amount Paid (₱)</label>
-          <input
-            v-model.number="amountPaid"
-            type="number"
-            min="0"
-            step="0.01"
-            class="input text-2xl font-bold text-primary-700 text-center"
-          />
-        </div>
-
-        <!-- Change Display -->
-        <div v-if="amountPaid >= grandTotal" class="bg-green-50 rounded-lg p-4 border-2 border-green-300">
-          <div class="flex justify-between items-center">
-            <span class="text-lg font-semibold text-green-700">Change</span>
-            <span class="text-2xl font-bold text-green-700">{{ formatCurrency(change) }}</span>
+          <!-- Payment Method -->
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-gray-700">Payment Method:</label>
+            <select v-model="paymentMethod" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="cash">💵 Cash</option>
+              <option value="card">💳 Card</option>
+              <option value="check">✓ Check</option>
+              <option value="mixed">Mixed</option>
+            </select>
           </div>
-        </div>
 
-        <div v-if="saleError" class="text-sm text-red-600 bg-red-50 rounded-lg p-3 font-medium">
-          {{ saleError }}
-        </div>
+          <!-- Amount Paid -->
+          <div class="space-y-1">
+            <label class="text-sm font-medium text-gray-700">Amount Paid:</label>
+            <input
+              v-model.number="amountPaid"
+              type="number"
+              placeholder="0.00"
+              class="w-full px-3 py-3 border border-gray-300 rounded-lg text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
 
-        <!-- Complete Sale Button -->
-        <button
-          class="btn-success w-full py-4 text-lg font-bold transition-all"
-          :disabled="!cart.length || amountPaid < grandTotal || processing"
-          @click="processSale"
-        >
-          {{ processing ? 'Processing…' : `✓ Complete Sale` }}
-        </button>
+          <!-- Change -->
+          <div class="bg-green-50 p-3 rounded-lg border-2 border-green-200">
+            <p class="text-xs text-green-700 mb-1">Change:</p>
+            <p class="text-2xl font-bold text-green-600">₱{{ formatPrice(Math.max(0, amountPaid - totalAmount)) }}</p>
+          </div>
+
+          <!-- Complete Sale Button -->
+          <button
+            v-if="cartItems.length > 0"
+            @click="completeSale"
+            :disabled="amountPaid < totalAmount"
+            :class="[
+              'w-full py-4 rounded-lg font-bold text-lg transition-all duration-200',
+              amountPaid >= totalAmount
+                ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            ]"
+          >
+            ✓ Complete Sale
+          </button>
+
+          <!-- Print Receipt Button -->
+          <button
+            v-if="cartItems.length > 0"
+            @click="printReceipt"
+            class="w-full py-2 rounded-lg font-medium text-sm text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
+          >
+            🖨️ Print Preview
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Receipt Modal -->
-    <Modal v-model="showReceipt" title="Sale Complete" width="500px">
-      <div class="text-center mb-6">
-        <div class="text-6xl mb-3">✅</div>
-        <p class="text-2xl font-bold text-gray-900">Sale Completed!</p>
-        <p class="text-base text-gray-500 mt-2">{{ lastSale?.sale_number }}</p>
+    <!-- Loading Overlay -->
+    <div v-if="isLoading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6">
+        <p class="text-center text-gray-700">Processing sale...</p>
       </div>
-      <div class="bg-gray-50 rounded-lg p-6 space-y-3 text-base">
-        <div class="flex justify-between">
-          <span class="text-gray-600">Total</span>
-          <span class="font-bold text-lg">{{ formatCurrency(lastSale?.total_amount) }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-600">Amount Paid</span>
-          <span class="font-semibold">{{ formatCurrency(lastSale?.amount_paid) }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-600">Change</span>
-          <span class="font-bold text-green-600 text-lg">{{ formatCurrency(lastSale?.change_amount) }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-600">Payment Method</span>
-          <span class="font-semibold">{{ paymentLabel(lastSale?.payment_method) }}</span>
-        </div>
-        <div class="flex justify-between border-t pt-3">
-          <span class="text-gray-600">OR/Invoice</span>
-          <span class="font-mono text-sm font-semibold">Auto-generated</span>
-        </div>
+    </div>
+
+    <!-- Success Message -->
+    <transition name="fade">
+      <div
+        v-if="successMessage"
+        class="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg"
+      >
+        {{ successMessage }}
       </div>
-      <template #footer>
-        <button class="btn-secondary" @click="showReceipt = false; newSale()">New Sale</button>
-        <button class="btn-primary" @click="printReceipt">🖨️ Print Receipt</button>
-      </template>
-    </Modal>
+    </transition>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { productsApi, categoriesApi, salesApi, customersApi } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
-import { useAppStore } from '@/stores/app'
-import { formatCurrency, paymentLabel, stockStatusColor, stockStatusLabel, PAYMENT_METHODS } from '@/utils/format'
-import Modal from '@/components/common/Modal.vue'
+import { productsApi, categoriesApi, salesApi } from '@/utils/api'
 
-const auth = useAuthStore()
-const appStore = useAppStore()
+const authStore = useAuthStore()
 
+// State
 const products = ref([])
 const categories = ref([])
-const customers = ref([])
-const search = ref('')
+const cartItems = ref([])
 const selectedCategory = ref(null)
-const selectedCustomer = ref(null)
-const cart = ref([])
-const extraDiscount = ref(0)
+const searchQuery = ref('')
+const selectedCustomer = ref('')
+const showCustomer = ref(false)
+const discountPercent = ref(0)
+const discountAmount = ref(0)
 const paymentMethod = ref('cash')
 const amountPaid = ref(0)
-const processing = ref(false)
-const saleError = ref('')
-const showReceipt = ref(false)
-const lastSale = ref(null)
-const vatRate = ref(12)
+const isLoading = ref(false)
+const successMessage = ref('')
 
-function itemTotal(item) {
-  const base = item.unit_price * item.quantity
-  const disc = base * (item.discount_percent / 100)
-  return base - disc
-}
+// Computed
+const filteredProducts = computed(() => {
+  let filtered = products.value
 
-const subtotal = computed(() => cart.value.reduce((s, i) => s + itemTotal(i), 0))
-const vatAmount = computed(() => subtotal.value * (vatRate.value / 100))
-const grandTotal = computed(() => subtotal.value + vatAmount.value - (extraDiscount.value || 0))
-const change = computed(() => (amountPaid.value || 0) - grandTotal.value)
+  if (selectedCategory.value) {
+    filtered = filtered.filter(p => p.category_id === selectedCategory.value)
+  }
 
-function addToCart(p) {
-  const existing = cart.value.find((i) => i.product_id === p.id)
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q)
+    )
+  }
+
+  return filtered
+})
+
+const subtotal = computed(() =>
+  cartItems.value.reduce((sum, item) => sum + item.quantity * item.selling_price, 0)
+)
+
+const totalDiscount = computed(() => {
+  const percentDiscount = subtotal.value * (discountPercent.value / 100)
+  return percentDiscount + (discountAmount.value || 0)
+})
+
+const vatAmount = computed(() => (subtotal.value - totalDiscount.value) * 0.12)
+
+const totalAmount = computed(() => subtotal.value - totalDiscount.value + vatAmount.value)
+
+const userAvatar = computed(() => {
+  const initial = (authStore.user?.username || 'U').charAt(0).toUpperCase()
+  return `https://ui-avatars.com/api/?name=${initial}&background=3b82f6&color=fff&size=40`
+})
+
+// Methods
+function addToCart(product) {
+  const existing = cartItems.value.find(item => item.product_id === product.id)
+
   if (existing) {
-    if (existing.quantity < p.quantity) existing.quantity++
-    else appStore.notify(`Only ${p.quantity} in stock`, 'warning')
+    if (existing.quantity < product.quantity_on_hand) {
+      existing.quantity += 1
+    }
   } else {
-    cart.value.push({
-      product_id: p.id,
-      name: p.name,
-      unit_price: p.selling_price,
+    cartItems.value.push({
+      product_id: product.id,
+      product_name: product.name,
+      selling_price: product.selling_price,
       quantity: 1,
-      discount_percent: 0,
-      max_qty: p.quantity,
+      quantity_available: product.quantity_on_hand,
+      discount: 0,
     })
   }
-  if (!amountPaid.value || amountPaid.value < grandTotal.value) {
-    amountPaid.value = Math.ceil(grandTotal.value)
+}
+
+function removeFromCart(idx) {
+  cartItems.value.splice(idx, 1)
+}
+
+function incrementQuantity(idx) {
+  const item = cartItems.value[idx]
+  if (item.quantity < item.quantity_available) {
+    item.quantity += 1
   }
 }
 
-function increaseQty(i) {
-  const item = cart.value[i]
-  if (item.quantity < item.max_qty) item.quantity++
-  else appStore.notify('Insufficient stock', 'warning')
-}
-
-function decreaseQty(i) {
-  if (cart.value[i].quantity > 1) cart.value[i].quantity--
-  else removeItem(i)
-}
-
-function validateQty(i) {
-  const item = cart.value[i]
-  if (item.quantity < 1) item.quantity = 1
-  if (item.quantity > item.max_qty) {
-    item.quantity = item.max_qty
-    appStore.notify(`Maximum ${item.max_qty} available`, 'warning')
+function decrementQuantity(idx) {
+  const item = cartItems.value[idx]
+  if (item.quantity > 1) {
+    item.quantity -= 1
   }
 }
 
-function removeItem(i) {
-  cart.value.splice(i, 1)
+function updateQuantity(idx, value) {
+  const item = cartItems.value[idx]
+  const qty = Math.max(1, Math.min(parseInt(value) || 1, item.quantity_available))
+  item.quantity = qty
 }
 
-async function searchProducts() {
-  try {
-    products.value = await productsApi.getProducts(auth.token, {
-      search: search.value || null,
-      category_id: selectedCategory.value,
-      active_only: true,
-    })
-  } catch (_) {}
+function updateDiscount(idx, value) {
+  cartItems.value[idx].discount = Math.max(0, Math.min(100, parseFloat(value) || 0))
 }
 
-async function processSale() {
-  saleError.value = ''
-  processing.value = true
+function clearCart() {
+  if (confirm('Are you sure you want to clear the cart?')) {
+    cartItems.value = []
+    amountPaid.value = 0
+    discountPercent.value = 0
+    discountAmount.value = 0
+  }
+}
+
+async function completeSale() {
+  if (cartItems.value.length === 0) {
+    alert('Cart is empty')
+    return
+  }
+
+  if (amountPaid.value < totalAmount.value) {
+    alert('Insufficient payment')
+    return
+  }
+
+  isLoading.value = true
+
   try {
-    const sale = await salesApi.createSale(auth.token, {
-      customer_id: selectedCustomer.value,
-      items: cart.value.map((i) => ({
-        product_id: i.product_id,
-        quantity: i.quantity,
-        unit_price: i.unit_price,
-        discount_percent: i.discount_percent,
+    const saleRequest = {
+      customer_id: null,
+      items: cartItems.value.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.selling_price,
+        discount_percent: item.discount || 0,
       })),
-      discount_amount: extraDiscount.value || 0,
-      amount_paid: amountPaid.value,
+      discount_amount: discountAmount.value,
+      discount_percent: discountPercent.value,
       payment_method: paymentMethod.value,
-      notes: null,
-    })
-    lastSale.value = sale
-    showReceipt.value = true
-    searchProducts()
-  } catch (e) {
-    saleError.value = e.message
-  } finally {
-    processing.value = false
-  }
-}
+      amount_paid: amountPaid.value,
+      notes: selectedCustomer.value || '',
+    }
 
-function newSale() {
-  cart.value = []
-  extraDiscount.value = 0
-  amountPaid.value = 0
-  selectedCustomer.value = null
-  saleError.value = ''
+    await salesApi.createSale(authStore.token, saleRequest)
+
+    successMessage.value = '✓ Sale completed successfully!'
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+
+    // Clear cart
+    cartItems.value = []
+    amountPaid.value = 0
+    discountPercent.value = 0
+    discountAmount.value = 0
+    selectedCustomer.value = ''
+
+    // Reload products to update stock
+    await loadProducts()
+  } catch (err) {
+    alert(`Error: ${err.message}`)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 function printReceipt() {
-  window.print()
+  const receipt = `
+    RECEIPT
+    ═══════════════════════
+    Date: ${new Date().toLocaleString()}
+    User: ${authStore.user?.username}
+    
+    Items:
+    ${cartItems.value.map(item => `${item.product_name} x${item.quantity} = ₱${formatPrice(item.quantity * item.selling_price)}`).join('\n')}
+    
+    Subtotal: ₱${formatPrice(subtotal.value)}
+    Discount: -₱${formatPrice(totalDiscount.value)}
+    VAT: ₱${formatPrice(vatAmount.value)}
+    TOTAL: ₱${formatPrice(totalAmount.value)}
+    
+    Amount Paid: ₱${formatPrice(amountPaid.value)}
+    Change: ₱${formatPrice(Math.max(0, amountPaid.value - totalAmount.value))}
+    
+    Thank you for your purchase!
+  `
+  console.log(receipt)
+  alert('Receipt printed to console')
+}
+
+function formatPrice(price) {
+  return parseFloat(price || 0).toFixed(2)
+}
+
+// Load data
+async function loadProducts() {
+  try {
+    const filter = null
+    const data = await productsApi.getProducts(authStore.token, filter)
+    products.value = data.products || data || []
+  } catch (err) {
+    console.error('Error loading products:', err)
+  }
+}
+
+async function loadCategories() {
+  try {
+    const data = await categoriesApi.getCategories(authStore.token)
+    categories.value = data.categories || data || []
+  } catch (err) {
+    console.error('Error loading categories:', err)
+  }
 }
 
 onMounted(async () => {
-  const settings = await appStore.loadSettings()
-  vatRate.value = parseFloat(appStore.getSetting('vat_rate', '12'))
-  await Promise.all([
-    searchProducts(),
-    categoriesApi.getCategories(auth.token).then((c) => (categories.value = c)),
-    customersApi.getCustomers(auth.token).then((c) => (customers.value = c)),
-  ])
+  await loadProducts()
+  await loadCategories()
 })
 </script>
+
+<style scoped>
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
