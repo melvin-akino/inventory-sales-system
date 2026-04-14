@@ -40,6 +40,12 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute("INSERT INTO schema_migrations (version) VALUES (3)", [])?;
     }
 
+    // Add migration v4 for pharmacy system
+    if current_version < 4 {
+        migration_v4(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (4)", [])?;
+    }
+
     Ok(())
 }
 
@@ -296,6 +302,160 @@ fn migration_v3(conn: &Connection) -> Result<()> {
         (7, 'ACC-CONDUIT-PVC', 'PVC Conduit Pipe', 'PVC conduit pipe for wire protection 100M', 'roll', 35.00, 115.00, 25, 8),
         (7, 'ACC-BREAKER-16A', 'Circuit Breaker 16A', '16A automatic circuit breaker', 'piece', 12.00, 42.00, 80, 20),
         (7, 'ACC-SURGE-PROTECT', 'Surge Protector', '4-outlet surge protection power strip', 'piece', 15.00, 50.00, 90, 15);"
+    )?;
+    Ok(())
+}
+
+// Migration v4: Add pharmacy system tables
+fn migration_v4(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        -- Pharmacy Patients
+        CREATE TABLE IF NOT EXISTS pharmacy_patients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT,
+            date_of_birth DATE,
+            gender TEXT,
+            address TEXT,
+            allergies TEXT,
+            medical_conditions TEXT,
+            insurance_provider TEXT,
+            insurance_member_id TEXT,
+            preferred_pharmacy TEXT,
+            emergency_contact TEXT,
+            emergency_contact_phone TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Pharmacy Product Details (extends products table)
+        CREATE TABLE IF NOT EXISTS pharmacy_product_details (
+            product_id INTEGER PRIMARY KEY,
+            generic_name TEXT,
+            brand_name TEXT,
+            strength TEXT,
+            dosage_form TEXT,
+            manufacturer TEXT,
+            batch_number TEXT,
+            expiry_date DATE,
+            manufactured_date DATE,
+            storage_condition TEXT,
+            requires_prescription INTEGER NOT NULL DEFAULT 0,
+            is_controlled_substance INTEGER NOT NULL DEFAULT 0,
+            controlled_category TEXT,
+            dea_number TEXT,
+            is_covered_by_insurance INTEGER NOT NULL DEFAULT 0,
+            insurance_tier INTEGER,
+            ndc_code TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        -- Prescriptions
+        CREATE TABLE IF NOT EXISTS prescriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prescription_number TEXT UNIQUE NOT NULL,
+            patient_id INTEGER NOT NULL,
+            doctor_name TEXT,
+            doctor_license TEXT,
+            prescribing_date DATE NOT NULL,
+            expiry_date DATE,
+            instructions TEXT,
+            refills_allowed INTEGER DEFAULT 0,
+            refills_used INTEGER DEFAULT 0,
+            is_controlled INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'filled', 'expired', 'voided')),
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (patient_id) REFERENCES pharmacy_patients(id)
+        );
+
+        -- Refill Requests
+        CREATE TABLE IF NOT EXISTS refill_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prescription_id INTEGER NOT NULL,
+            patient_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            refill_number INTEGER NOT NULL,
+            requested_date DATE NOT NULL,
+            filled_date DATE,
+            quantity INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'filled', 'denied', 'expired')),
+            reason TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (prescription_id) REFERENCES prescriptions(id),
+            FOREIGN KEY (patient_id) REFERENCES pharmacy_patients(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        -- Controlled Substance Log (for audit trail and compliance)
+        CREATE TABLE IF NOT EXISTS controlled_substance_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            transaction_type TEXT NOT NULL CHECK(transaction_type IN ('sale', 'return', 'adjustment', 'destruction')),
+            quantity INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            patient_id INTEGER,
+            prescription_id INTEGER,
+            witness_name TEXT,
+            reason TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (patient_id) REFERENCES pharmacy_patients(id),
+            FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
+        );
+
+        -- Pharmacy Sales (extends sales table with pharmacy-specific info)
+        CREATE TABLE IF NOT EXISTS pharmacy_sales (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL UNIQUE,
+            patient_id INTEGER,
+            prescription_id INTEGER,
+            pharmacist_name TEXT,
+            pharmacist_license TEXT,
+            insurance_covered REAL DEFAULT 0,
+            insurance_claim_number TEXT,
+            insurance_status TEXT DEFAULT 'pending' CHECK(insurance_status IN ('pending', 'approved', 'denied')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+            FOREIGN KEY (patient_id) REFERENCES pharmacy_patients(id),
+            FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
+        );
+
+        -- Pharmacy Inventory Alerts
+        CREATE TABLE IF NOT EXISTS pharmacy_inventory_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            alert_type TEXT NOT NULL CHECK(alert_type IN ('low_stock', 'expiry_near', 'expired', 'out_of_stock')),
+            alert_message TEXT NOT NULL,
+            days_until_expiry INTEGER,
+            quantity_threshold INTEGER,
+            is_resolved INTEGER NOT NULL DEFAULT 0,
+            resolved_by INTEGER,
+            resolved_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id),
+            FOREIGN KEY (resolved_by) REFERENCES users(id)
+        );
+
+        -- Update categories to include pharmacy categories
+        INSERT OR IGNORE INTO categories (name, description) VALUES
+            ('Antibiotics', 'Antibiotic medications'),
+            ('Painkillers', 'Pain relief medications'),
+            ('Cough & Cold', 'Cough and cold medicines'),
+            ('Digestive', 'Digestive health products'),
+            ('Vitamins & Supplements', 'Vitamins and dietary supplements'),
+            ('Topical', 'Topical creams and ointments'),
+            ('First Aid', 'First aid and wound care'),
+            ('Over-the-Counter', 'OTC medications');
+        "
     )?;
     Ok(())
 }

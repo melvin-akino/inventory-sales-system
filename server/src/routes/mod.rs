@@ -2,6 +2,7 @@ pub mod auth;
 pub mod customers;
 pub mod inventory;
 pub mod invoices;
+pub mod pharmacy;
 pub mod reports;
 pub mod sales;
 pub mod settings;

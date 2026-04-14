@@ -88,6 +88,16 @@ async fn main() {
         // ── Settings ──────────────────────────────────────────────────────────
         .route("/api/get-settings",    post(routes::settings::get_settings))
         .route("/api/update-settings", post(routes::settings::update_settings))
+        // ── Pharmacy ──────────────────────────────────────────────────────────
+        .route("/api/pharmacy/patients",                post(routes::pharmacy::get_pharmacy_patients))
+        .route("/api/pharmacy/create-patient",         post(routes::pharmacy::create_pharmacy_patient))
+        .route("/api/pharmacy/update-patient",         post(routes::pharmacy::update_pharmacy_patient))
+        .route("/api/pharmacy/prescriptions",          post(routes::pharmacy::get_prescriptions))
+        .route("/api/pharmacy/prescriptions/by-number", post(routes::pharmacy::get_prescription_by_number))
+        .route("/api/pharmacy/create-prescription",    post(routes::pharmacy::create_prescription))
+        .route("/api/pharmacy/controlled-log",         post(routes::pharmacy::log_controlled_substance))
+        .route("/api/pharmacy/controlled-logs",        post(routes::pharmacy::get_controlled_substance_logs))
+        .route("/api/pharmacy/expiry-alerts",          post(routes::pharmacy::get_expiry_alerts))
         .layer(cors)
         .with_state(db);
 
