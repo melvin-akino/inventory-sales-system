@@ -8,11 +8,16 @@ const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
 
 // Determine API base URL
 let API_BASE_URL = '/api'
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && !isTauri) {
+  // In web mode running in browser
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    // In development, use the backend directly
+    // Local development: use direct localhost
     API_BASE_URL = 'http://localhost:3000'
+  } else if (window.location.hostname === 'lumisync-frontend' || window.location.hostname.includes('docker')) {
+    // Running in Docker: use internal network
+    API_BASE_URL = 'http://lumisync-backend:3000'
   }
+  // Otherwise use /api proxy (default for production)
 }
 
 async function invoke(command, args = {}) {

@@ -3,9 +3,11 @@
     <div class="w-full max-w-sm">
       <!-- Logo -->
       <div class="text-center mb-8">
-        <div class="w-16 h-16 rounded-2xl bg-primary-500 mx-auto flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-xl">L</div>
-        <h1 class="text-2xl font-bold text-white">LumiSync</h1>
-        <p class="text-gray-400 text-sm mt-1">Inventory & Sales System</p>
+        <div class="w-16 h-16 rounded-2xl bg-primary-500 mx-auto flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-xl">
+          {{ companyInitial }}
+        </div>
+        <h1 class="text-2xl font-bold text-white">{{ companyName }}</h1>
+        <p class="text-gray-400 text-sm mt-1">{{ companySubtitle }}</p>
       </div>
 
       <!-- Card -->
@@ -64,24 +66,52 @@
       </div>
 
       <p class="text-center text-xs text-gray-500 mt-6">
-        LumiSync Electronics · Philippines
+        {{ companyDisplayText }}
       </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { settingsApi } from '@/utils/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const showPassword = ref(false)
 const form = ref({ username: '', password: '' })
 
+// Company info
+const companyName = ref('LumiSync')
+const companyAddress = ref('Philippines')
+const companySubtitle = ref('Inventory & Sales System')
+
+const companyInitial = computed(() => companyName.value.charAt(0).toUpperCase())
+const companyDisplayText = computed(() => `${companyName.value} · ${companyAddress.value}`)
+
+async function loadCompanyInfo() {
+  try {
+    // Load settings without token (should be public or we get defaults)
+    const settings = await settingsApi.getSettings(null).catch(() => ({}))
+    
+    if (settings && typeof settings === 'object') {
+      companyName.value = settings.company_name || 'LumiSync'
+      companyAddress.value = settings.company_address || 'Philippines'
+    }
+  } catch (e) {
+    // If it fails, keep defaults
+    console.warn('Could not load company settings:', e.message)
+  }
+}
+
 async function handleLogin() {
   const ok = await authStore.login(form.value.username, form.value.password)
   if (ok) router.push('/dashboard')
 }
+
+onMounted(async () => {
+  await loadCompanyInfo()
+})
 </script>
