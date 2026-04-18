@@ -43,6 +43,23 @@ async fn main() {
         .route("/api/login",            post(routes::auth::login))
         .route("/api/logout",           post(routes::auth::logout))
         .route("/api/get-current-user", post(routes::auth::get_current_user))
+        // ── E-Commerce Customers ──────────────────────────────────────────────
+        .route("/api/ecommerce/register",     post(routes::ecommerce::ecommerce_register))
+        .route("/api/ecommerce/login",        post(routes::ecommerce::ecommerce_login))
+        .route("/api/ecommerce/get-customer", post(routes::ecommerce::ecommerce_get_customer))
+        // ── E-Commerce Shop ───────────────────────────────────────────────────
+        .route("/api/ecommerce/products", post(routes::ecommerce::ecommerce_get_products))
+        // ── Checkout & Orders ─────────────────────────────────────────────────
+        .route("/api/ecommerce/checkout",          post(routes::ecommerce::checkout))
+        .route("/api/ecommerce/mock-payment",      post(routes::ecommerce::mock_payment))
+        // ── Admin Order Management ────────────────────────────────────────────
+        .route("/api/admin/orders",              post(routes::ecommerce::admin_get_orders))
+        .route("/api/admin/orders/update-status", post(routes::ecommerce::admin_update_order_status))
+        // ── Industries ────────────────────────────────────────────────────────
+        .route("/api/get-industries",              post(routes::industries::get_industries))
+        .route("/api/get-industry",                post(routes::industries::get_industry))
+        .route("/api/add-industry-attribute",      post(routes::industries::add_industry_attribute))
+        .route("/api/assign-user-to-industry",     post(routes::industries::assign_user_to_industry))
         // ── Users ─────────────────────────────────────────────────────────────
         .route("/api/get-users",       post(routes::users::get_users))
         .route("/api/create-user",     post(routes::users::create_user))

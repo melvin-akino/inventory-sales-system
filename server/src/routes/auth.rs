@@ -20,8 +20,11 @@ pub async fn login(
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
 
     let result = db.query_row(
-        "SELECT id, username, password_hash, full_name, email, role, is_active, created_at, updated_at
-         FROM users WHERE username = ? AND is_active = 1",
+        "SELECT u.id, u.username, u.password_hash, u.full_name, u.email, u.role, u.is_active, u.industry_id,
+                i.code as industry_code, i.name as industry_name, u.created_at, u.updated_at
+         FROM users u
+         LEFT JOIN industries i ON u.industry_id = i.id
+         WHERE u.username = ? AND u.is_active = 1",
         params![username],
         |row| {
             Ok((
@@ -32,14 +35,17 @@ pub async fn login(
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, String>(5)?,
                 row.get::<_, bool>(6)?,
-                row.get::<_, String>(7)?,
-                row.get::<_, String>(8)?,
+                row.get::<_, Option<i64>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, String>(10)?,
+                row.get::<_, String>(11)?,
             ))
         },
     );
 
     match result {
-        Ok((id, uname, password_hash, full_name, email, role, is_active, created_at, updated_at)) => {
+        Ok((id, uname, password_hash, full_name, email, role, is_active, industry_id, industry_code, industry_name, created_at, updated_at)) => {
             if !bcrypt::verify(password, &password_hash).unwrap_or(false) {
                 return Err((
                     StatusCode::UNAUTHORIZED,
@@ -61,18 +67,29 @@ pub async fn login(
             )
             .map_err(|e| server_err(e.to_string()))?;
 
+            let mut user_json = json!({
+                "id": id,
+                "username": uname,
+                "full_name": full_name,
+                "email": email,
+                "role": role,
+                "is_active": is_active,
+                "created_at": created_at,
+                "updated_at": updated_at
+            });
+
+            // Add industry information if available
+            if let (Some(ind_id), Some(ind_code), Some(ind_name)) = (industry_id, industry_code, industry_name) {
+                user_json["industry"] = json!({
+                    "id": ind_id,
+                    "code": ind_code,
+                    "name": ind_name
+                });
+            }
+
             Ok(Json(json!({
                 "token": token,
-                "user": {
-                    "id": id,
-                    "username": uname,
-                    "full_name": full_name,
-                    "email": email,
-                    "role": role,
-                    "is_active": is_active,
-                    "created_at": created_at,
-                    "updated_at": updated_at
-                }
+                "user": user_json
             })))
         }
         Err(_) => Err((
@@ -118,22 +135,40 @@ pub async fn get_current_user(
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
 
     let user = db.query_row(
-        "SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active, u.created_at, u.updated_at
+        "SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active, u.industry_id,
+                i.code as industry_code, i.name as industry_name, u.created_at, u.updated_at
          FROM sessions s
          JOIN users u ON s.user_id = u.id
+         LEFT JOIN industries i ON u.industry_id = i.id
          WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1",
         params![token],
         |row| {
-            Ok(json!({
+            let mut user_obj = json!({
                 "id":         row.get::<_, i64>(0)?,
                 "username":   row.get::<_, String>(1)?,
                 "full_name":  row.get::<_, String>(2)?,
                 "email":      row.get::<_, Option<String>>(3)?,
                 "role":       row.get::<_, String>(4)?,
                 "is_active":  row.get::<_, bool>(5)?,
-                "created_at": row.get::<_, String>(6)?,
-                "updated_at": row.get::<_, String>(7)?
-            }))
+                "created_at": row.get::<_, String>(9)?,
+                "updated_at": row.get::<_, String>(10)?
+            });
+
+            // Add industry if available
+            if let Ok(Some(ind_id)) = row.get::<_, Option<i64>>(6) {
+                if let (Ok(Some(ind_code)), Ok(Some(ind_name))) = (
+                    row.get::<_, Option<String>>(7),
+                    row.get::<_, Option<String>>(8)
+                ) {
+                    user_obj["industry"] = json!({
+                        "id": ind_id,
+                        "code": ind_code,
+                        "name": ind_name
+                    });
+                }
+            }
+
+            Ok(user_obj)
         },
     )
     .map_err(|_| (StatusCode::UNAUTHORIZED, "Session expired or invalid".to_string()))?;
@@ -149,4 +184,16 @@ pub fn get_token(headers: &HeaderMap, body: &Value) -> Result<String, (StatusCod
             .map(|s| s.to_string())
             .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Missing token".to_string()))
     })
+}
+
+// Get industry ID from user's session
+pub fn get_user_industry_id(db: &rusqlite::Connection, token: &str) -> Result<Option<i64>, (StatusCode, String)> {
+    db.query_row(
+        "SELECT u.industry_id FROM sessions s
+         JOIN users u ON s.user_id = u.id
+         WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1",
+        params![token],
+        |row| row.get::<_, Option<i64>>(0),
+    )
+    .map_err(|_| (StatusCode::UNAUTHORIZED, "Session expired or invalid".to_string()))
 }

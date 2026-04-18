@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use rusqlite::params;
 use serde_json::{json, Value};
 
-use super::auth::get_token;
+use super::auth::{get_token, get_user_industry_id};
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
@@ -20,9 +20,16 @@ pub async fn get_categories(
     let token = get_token(&headers, &body)?;
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
     validate_session(&db, &token)?;
+    let industry_id = get_user_industry_id(&db, &token)?;
+
+    let sql = if let Some(ind_id) = industry_id {
+        format!("SELECT id, name, description, created_at FROM categories WHERE industry_id = {} ORDER BY name", ind_id)
+    } else {
+        "SELECT id, name, description, created_at FROM categories WHERE industry_id IS NULL ORDER BY name".to_string()
+    };
 
     let mut stmt = db
-        .prepare("SELECT id, name, description, created_at FROM categories ORDER BY name")
+        .prepare(&sql)
         .map_err(|e| server_err(e.to_string()))?;
 
     let cats: Vec<Value> = stmt
@@ -50,14 +57,15 @@ pub async fn create_category(
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
     let session = validate_session(&db, &token)?;
     require_role(&session, &["super_admin", "admin", "manager"])?;
+    let industry_id = get_user_industry_id(&db, &token)?;
 
     let req = body.get("request").ok_or_else(|| bad_req("Missing 'request'"))?;
     let name = req["name"].as_str().ok_or_else(|| bad_req("Missing name"))?;
     let description = req["description"].as_str();
 
     db.execute(
-        "INSERT INTO categories (name, description) VALUES (?, ?)",
-        params![name.trim(), description],
+        "INSERT INTO categories (name, description, industry_id) VALUES (?, ?, ?)",
+        params![name.trim(), description, industry_id],
     )
     .map_err(|e| {
         if e.to_string().contains("UNIQUE") {
@@ -130,7 +138,7 @@ pub async fn update_category(
 const PRODUCT_SELECT: &str =
     "SELECT p.id, p.category_id, c.name as category_name, p.sku, p.name, p.description,
             p.unit, p.cost_price, p.selling_price, p.quantity, p.reorder_level,
-            p.is_vat_exempt, p.is_active, p.created_at, p.updated_at
+            p.is_vat_exempt, p.is_active, p.industry_id, p.created_at, p.updated_at
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id";
 
@@ -149,8 +157,9 @@ fn row_to_product(row: &rusqlite::Row) -> rusqlite::Result<Value> {
         "reorder_level": row.get::<_, i64>(10)?,
         "is_vat_exempt": row.get::<_, bool>(11)?,
         "is_active":     row.get::<_, bool>(12)?,
-        "created_at":    row.get::<_, String>(13)?,
-        "updated_at":    row.get::<_, String>(14)?
+        "industry_id":   row.get::<_, Option<i64>>(13)?,
+        "created_at":    row.get::<_, String>(14)?,
+        "updated_at":    row.get::<_, String>(15)?
     }))
 }
 
@@ -162,6 +171,7 @@ pub async fn get_products(
     let token = get_token(&headers, &body)?;
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
     validate_session(&db, &token)?;
+    let industry_id = get_user_industry_id(&db, &token)?;
 
     let filter = body.get("filter");
 
@@ -188,9 +198,10 @@ pub async fn get_products(
         .unwrap_or(true);
 
     let sql = format!(
-        "{} WHERE {}{}{}{}ORDER BY p.name",
+        "{} WHERE {}{}{}{}{}ORDER BY p.name",
         PRODUCT_SELECT,
         if active_only { "p.is_active = 1 " } else { "1=1 " },
+        if let Some(ind_id) = industry_id { format!("AND p.industry_id = {} ", ind_id) } else { "AND p.industry_id IS NULL ".to_string() },
         if search.is_some() { "AND (p.name LIKE :search OR p.sku LIKE :search) " } else { "" },
         if category_id.is_some() { "AND p.category_id = :cat_id " } else { "" },
         if low_stock_only { "AND p.quantity <= p.reorder_level " } else { "" },
@@ -268,6 +279,7 @@ pub async fn create_product(
     let db = db.lock().map_err(|e| server_err(e.to_string()))?;
     let session = validate_session(&db, &token)?;
     require_role(&session, &["super_admin", "admin", "manager"])?;
+    let industry_id = get_user_industry_id(&db, &token)?;
 
     let req = body.get("request").ok_or_else(|| bad_req("Missing 'request'"))?;
 
@@ -287,9 +299,9 @@ pub async fn create_product(
     let is_vat_exempt = req["is_vat_exempt"].as_bool().or_else(|| req["isVatExempt"].as_bool()).unwrap_or(false);
 
     db.execute(
-        "INSERT INTO products (category_id, sku, name, description, unit, cost_price, selling_price, quantity, reorder_level, is_vat_exempt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        params![category_id, sku.trim(), name.trim(), description, unit, cost_price, selling_price, quantity, reorder_level, is_vat_exempt],
+        "INSERT INTO products (category_id, sku, name, description, unit, cost_price, selling_price, quantity, reorder_level, is_vat_exempt, industry_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params![category_id, sku.trim(), name.trim(), description, unit, cost_price, selling_price, quantity, reorder_level, is_vat_exempt, industry_id],
     )
     .map_err(|e| {
         if e.to_string().contains("UNIQUE") { bad_req("SKU already exists") } else { server_err(e.to_string()) }

@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+mod migration_v7;
 
 pub fn initialize_db(db_path: &str) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
@@ -44,6 +45,24 @@ fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 4 {
         migration_v4(conn)?;
         conn.execute("INSERT INTO schema_migrations (version) VALUES (4)", [])?;
+    }
+
+    // Add migration v5 for pharmacy test data
+    if current_version < 5 {
+        migration_v5(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (5)", [])?;
+    }
+
+    // Add migration v6 for multi-industry support
+    if current_version < 6 {
+        migration_v6(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (6)", [])?;
+    }
+
+    // Add migration v7 for e-commerce
+    if current_version < 7 {
+        migration_v7::migration_v7(conn)?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (7)", [])?;
     }
 
     Ok(())
@@ -457,5 +476,240 @@ fn migration_v4(conn: &Connection) -> Result<()> {
             ('Over-the-Counter', 'OTC medications');
         "
     )?;
+    Ok(())
+}
+
+// Migration v6: Multi-industry support
+fn migration_v6(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        -- Industries
+        CREATE TABLE IF NOT EXISTS industries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            icon TEXT,
+            color TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Alter users table to add industry_id
+        ALTER TABLE users ADD COLUMN industry_id INTEGER REFERENCES industries(id) DEFAULT NULL;
+
+        -- Alter products table to add industry_id
+        ALTER TABLE products ADD COLUMN industry_id INTEGER REFERENCES industries(id) DEFAULT NULL;
+
+        -- Alter categories table to add industry_id (for industry-specific categories)
+        ALTER TABLE categories ADD COLUMN industry_id INTEGER REFERENCES industries(id) DEFAULT NULL;
+
+        -- Alter settings to have industry_id (for multi-tenant company settings)
+        ALTER TABLE settings ADD COLUMN industry_id INTEGER REFERENCES industries(id) DEFAULT NULL;
+
+        -- Product attributes table for industry-specific fields
+        CREATE TABLE IF NOT EXISTS product_attributes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            industry_id INTEGER NOT NULL,
+            attribute_name TEXT NOT NULL,
+            attribute_label TEXT NOT NULL,
+            attribute_type TEXT NOT NULL DEFAULT 'text'
+                CHECK(attribute_type IN ('text', 'number', 'checkbox', 'select', 'date', 'textarea')),
+            is_required INTEGER NOT NULL DEFAULT 0,
+            display_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (industry_id) REFERENCES industries(id) ON DELETE CASCADE,
+            UNIQUE(industry_id, attribute_name)
+        );
+
+        -- Product attribute values
+        CREATE TABLE IF NOT EXISTS product_attribute_values (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            attribute_id INTEGER NOT NULL,
+            attribute_value TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+            FOREIGN KEY (attribute_id) REFERENCES product_attributes(id) ON DELETE CASCADE,
+            UNIQUE(product_id, attribute_id)
+        );
+        "
+    )?;
+
+    // Insert default industries
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO industries (code, name, description, color) VALUES
+            ('electronics', 'Electronics & Lighting', 'Retail of electronic devices and lighting fixtures', '#3B82F6'),
+            ('pharmacy', 'Pharmacy & Healthcare', 'Pharmacy and healthcare products distribution', '#EC4899'),
+            ('retail', 'General Retail', 'General retail and merchandise', '#8B5CF6'),
+            ('grocery', 'Grocery & Food', 'Grocery stores and food retail', '#10B981'),
+            ('clothing', 'Clothing & Fashion', 'Apparel and fashion retail', '#F59E0B'),
+            ('furniture', 'Furniture & Home', 'Furniture and home goods retail', '#6366F1'),
+            ('automotive', 'Automotive & Parts', 'Automotive sales and parts distribution', '#EF4444'),
+            ('cosmetics', 'Cosmetics & Beauty', 'Beauty products and cosmetics retail', '#EC4899');
+        "
+    )?;
+
+    // Migrate existing LumiSync data to electronics industry
+    let electronics_id: i64 = conn
+        .query_row(
+            "SELECT id FROM industries WHERE code = 'electronics' LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(1);
+
+    // Update existing users to electronics industry
+    conn.execute(
+        "UPDATE users SET industry_id = ? WHERE industry_id IS NULL",
+        [electronics_id],
+    )?;
+
+    // Update existing products to electronics industry
+    conn.execute(
+        "UPDATE products SET industry_id = ? WHERE industry_id IS NULL",
+        [electronics_id],
+    )?;
+
+    // Update existing categories to electronics industry (for non-pharmacy categories)
+    conn.execute(
+        "UPDATE categories SET industry_id = ? WHERE industry_id IS NULL AND name NOT IN (
+            'Antibiotics', 'Painkillers', 'Cough & Cold', 'Digestive', 'Vitamins & Supplements',
+            'Topical', 'First Aid', 'Over-the-Counter'
+        )",
+        [electronics_id],
+    )?;
+
+    // Migrate pharmacy categories to pharmacy industry
+    let pharmacy_id: i64 = conn
+        .query_row(
+            "SELECT id FROM industries WHERE code = 'pharmacy' LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(2);
+
+    conn.execute(
+        "UPDATE categories SET industry_id = ? WHERE name IN (
+            'Antibiotics', 'Painkillers', 'Cough & Cold', 'Digestive', 'Vitamins & Supplements',
+            'Topical', 'First Aid', 'Over-the-Counter'
+        )",
+        [pharmacy_id],
+    )?;
+
+    // Define attributes for electronics industry
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO product_attributes (industry_id, attribute_name, attribute_label, attribute_type, is_required, display_order)
+        SELECT id, 'wattage', 'Wattage (W)', 'text', 0, 1 FROM industries WHERE code = 'electronics' UNION ALL
+        SELECT id, 'color_temp', 'Color Temperature', 'select', 0, 2 FROM industries WHERE code = 'electronics' UNION ALL
+        SELECT id, 'lumens', 'Brightness (Lumens)', 'number', 0, 3 FROM industries WHERE code = 'electronics' UNION ALL
+        SELECT id, 'lifespan_hours', 'Lifespan (hours)', 'number', 0, 4 FROM industries WHERE code = 'electronics';
+        "
+    )?;
+
+    // Define attributes for pharmacy industry
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO product_attributes (industry_id, attribute_name, attribute_label, attribute_type, is_required, display_order)
+        SELECT id, 'strength', 'Strength', 'text', 1, 1 FROM industries WHERE code = 'pharmacy' UNION ALL
+        SELECT id, 'dosage_form', 'Dosage Form', 'select', 1, 2 FROM industries WHERE code = 'pharmacy' UNION ALL
+        SELECT id, 'manufacturer', 'Manufacturer', 'text', 1, 3 FROM industries WHERE code = 'pharmacy' UNION ALL
+        SELECT id, 'expiry_date', 'Expiry Date', 'date', 1, 4 FROM industries WHERE code = 'pharmacy';
+        "
+    )?;
+
+    Ok(())
+}
+
+// Migration v5: Seed pharmacy test data
+fn migration_v5(conn: &Connection) -> Result<()> {
+    // Insert test pharmacy products
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO products (category_id, sku, name, description, unit, cost_price, selling_price, quantity, reorder_level)
+        VALUES
+        -- Antibiotics (Category 8)
+        (8, 'AMOX-500', 'Amoxicillin 500mg', 'Broad-spectrum antibiotic', 'tablet', 2.50, 12.00, 100, 20),
+        (8, 'CIPRO-500', 'Ciprofloxacin 500mg', 'Fluoroquinolone antibiotic', 'tablet', 3.50, 18.00, 80, 20),
+        (8, 'AZI-250', 'Azithromycin 250mg', 'Macrolide antibiotic', 'tablet', 4.00, 22.00, 60, 15),
+        
+        -- Painkillers (Category 9)
+        (9, 'PARACET-500', 'Paracetamol 500mg', 'Pain reliever and fever reducer', 'tablet', 1.50, 8.00, 200, 50),
+        (9, 'IBUPROF-200', 'Ibuprofen 200mg', 'Anti-inflammatory pain reliever', 'tablet', 2.00, 10.00, 150, 40),
+        (9, 'ASPIRIN-500', 'Aspirin 500mg', 'Analgesic and anti-inflammatory', 'tablet', 1.80, 9.00, 120, 30),
+        
+        -- Cough & Cold (Category 10)
+        (10, 'COUGH-SYR', 'Cough Syrup 100ml', 'Cough suppressant', 'bottle', 5.00, 25.00, 50, 10),
+        (10, 'LOZEN-20', 'Throat Lozenges 20pc', 'Sore throat relief', 'pack', 2.50, 12.00, 80, 20),
+        (10, 'DECON-TAB', 'Decongestant Tablet', 'Nasal decongestant', 'tablet', 1.20, 6.00, 200, 50),
+        
+        -- Digestive (Category 11)
+        (11, 'ANTACID-30', 'Antacid 30ml', 'Heartburn relief', 'bottle', 3.00, 15.00, 100, 20),
+        (11, 'LACTAID-100', 'Lactase Enzyme 100pc', 'Lactose intolerance aid', 'capsule', 8.00, 35.00, 40, 10),
+        (11, 'PROBIO-50', 'Probiotic 50 capsules', 'Gut health supplement', 'bottle', 12.00, 60.00, 30, 10),
+        
+        -- Vitamins & Supplements (Category 12)
+        (12, 'VITC-500', 'Vitamin C 500mg', 'Immunity booster', 'tablet', 3.00, 15.00, 150, 30),
+        (12, 'MULTIVIT', 'Multivitamin Daily', 'Complete vitamin complex', 'tablet', 4.00, 20.00, 100, 20),
+        (12, 'CALCIUM-600', 'Calcium 600mg', 'Bone health supplement', 'tablet', 2.50, 12.00, 120, 25),
+        (12, 'IRON-PLUS', 'Iron with Folic Acid', 'Anemia treatment', 'tablet', 3.50, 18.00, 80, 20),
+        
+        -- Topical (Category 13)
+        (13, 'NEOSPORIN-30', 'Neosporin 30g', 'Antibiotic ointment', 'tube', 4.00, 18.00, 100, 20),
+        (13, 'HYDROCORT-15', 'Hydrocortisone 1% 15g', 'Anti-inflammatory cream', 'tube', 5.00, 22.00, 70, 15),
+        (13, 'LOTION-200', 'Moisturizing Lotion 200ml', 'Dry skin treatment', 'bottle', 6.00, 28.00, 60, 15),
+        
+        -- First Aid (Category 14)
+        (14, 'BANDAGE-BOX', 'Adhesive Bandages Box', '100 count sterile bandages', 'box', 4.00, 18.00, 90, 20),
+        (14, 'GAUZE-PAD', 'Sterile Gauze Pads', 'Wound care sterile pads', 'pack', 3.50, 16.00, 120, 25),
+        (14, 'TAPE-MED', 'Medical Tape Roll', 'Hypoallergenic tape', 'roll', 2.50, 12.00, 150, 30);
+        "
+    )?;
+
+    // Insert test pharmacy product details with expiry dates
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO pharmacy_product_details (product_id, generic_name, brand_name, strength, dosage_form, manufacturer, batch_number, expiry_date, requires_prescription, is_controlled_substance, is_covered_by_insurance)
+        SELECT id, 'Amoxicillin', 'Amoxil', '500mg', 'tablet', 'Pharma Corp', 'BATCH001', '2026-08-15', 1, 0, 1 FROM products WHERE sku = 'AMOX-500' UNION ALL
+        SELECT id, 'Ciprofloxacin', 'Cipro', '500mg', 'tablet', 'Pharma Corp', 'BATCH002', '2026-09-20', 1, 0, 1 FROM products WHERE sku = 'CIPRO-500' UNION ALL
+        SELECT id, 'Azithromycin', 'Zithromax', '250mg', 'tablet', 'Pharma Corp', 'BATCH003', '2026-07-10', 1, 0, 1 FROM products WHERE sku = 'AZI-250' UNION ALL
+        SELECT id, 'Paracetamol', 'Tylenol', '500mg', 'tablet', 'Pharma Corp', 'BATCH004', '2026-12-30', 0, 0, 1 FROM products WHERE sku = 'PARACET-500' UNION ALL
+        SELECT id, 'Ibuprofen', 'Advil', '200mg', 'tablet', 'Pharma Corp', 'BATCH005', '2026-11-15', 0, 0, 1 FROM products WHERE sku = 'IBUPROF-200' UNION ALL
+        SELECT id, 'Aspirin', 'Bayer', '500mg', 'tablet', 'Pharma Corp', 'BATCH006', '2026-10-25', 0, 0, 1 FROM products WHERE sku = 'ASPIRIN-500' UNION ALL
+        SELECT id, 'Dextromethorphan', 'Robitussin', '100ml', 'liquid', 'Pharma Corp', 'BATCH007', '2026-06-30', 0, 1, 1 FROM products WHERE sku = 'COUGH-SYR' UNION ALL
+        SELECT id, 'Menthol', 'Halls', '20pc', 'lozenge', 'Pharma Corp', 'BATCH008', '2026-05-15', 0, 0, 0 FROM products WHERE sku = 'LOZEN-20' UNION ALL
+        SELECT id, 'Phenylephrine', 'Sudafed', 'tablet', 'tablet', 'Pharma Corp', 'BATCH009', '2026-04-20', 1, 0, 1 FROM products WHERE sku = 'DECON-TAB' UNION ALL
+        SELECT id, 'Calcium Carbonate', 'Tums', '30ml', 'liquid', 'Pharma Corp', 'BATCH010', '2026-08-10', 0, 0, 0 FROM products WHERE sku = 'ANTACID-30';
+        "
+    )?;
+
+    // Insert test pharmacy patients
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO pharmacy_patients (name, phone, email, date_of_birth, gender, address, allergies, medical_conditions, insurance_provider, insurance_member_id, emergency_contact, emergency_contact_phone)
+        VALUES
+        ('Maria Santos', '09123456789', 'maria@email.com', '1975-05-15', 'F', '123 Main St, Manila', 'Penicillin, Sulfa', 'Hypertension, Diabetes', 'PhilHealth', 'PH-001-2023', 'Juan Santos', '09198765432'),
+        ('Juan Dela Cruz', '09234567890', 'juan@email.com', '1980-08-22', 'M', '456 Oak Ave, Cebu', 'Aspirin', 'Asthma', 'PhilHealth', 'PH-002-2023', 'Rosa Dela Cruz', '09187654321'),
+        ('Rosa Garcia', '09345678901', 'rosa@email.com', '1988-03-10', 'F', '789 Pine Rd, Davao', 'Shellfish', 'Arthritis', 'PhilCare', 'PC-001-2023', 'Carlos Garcia', '09176543210'),
+        ('Carlos Reyes', '09456789012', 'carlos@email.com', '1965-11-30', 'M', '321 Elm St, Quezon City', 'None', 'Hypertension, High Cholesterol', 'PhilHealth', 'PH-003-2023', 'Maria Reyes', '09165432109'),
+        ('Anna Martinez', '09567890123', 'anna@email.com', '1992-07-18', 'F', '654 Birch Ln, Makati', 'Peanuts', 'None', 'Amcare', 'AM-001-2023', 'Miguel Martinez', '09154321098');
+        "
+    )?;
+
+    // Insert test prescriptions
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO prescriptions (prescription_number, patient_id, doctor_name, doctor_license, prescribing_date, expiry_date, instructions, refills_allowed, is_controlled, status, notes)
+        VALUES
+        ('RX001-2026', 1, 'Dr. Jose Santos', 'LIC-001', '2026-04-10', '2026-10-10', 'Take 1 tablet twice daily for 7 days', 2, 1, 'active', 'For infection'),
+        ('RX002-2026', 2, 'Dr. Maria Gonzales', 'LIC-002', '2026-04-08', '2026-10-08', 'Take 2 tablets twice daily as needed for pain', 0, 0, 'active', 'For chronic pain'),
+        ('RX003-2026', 3, 'Dr. Robert Torres', 'LIC-003', '2026-04-12', '2026-04-30', 'Take 1 tablet daily for high blood pressure', 5, 0, 'active', 'Maintenance'),
+        ('RX004-2026', 4, 'Dr. Angela Cruz', 'LIC-004', '2026-03-15', '2026-09-15', 'Take 1 capsule twice daily for cholesterol', 3, 0, 'active', 'Long-term therapy'),
+        ('RX005-2026', 5, 'Dr. Jose Santos', 'LIC-001', '2026-04-13', '2026-05-13', 'Take 1 tablet every 4 hours as needed', 1, 1, 'active', 'For acute pain');
+        "
+    )?;
+
     Ok(())
 }

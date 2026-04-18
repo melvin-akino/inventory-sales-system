@@ -3,6 +3,50 @@ import { useAuthStore } from '@/stores/auth'
 import { ACCESS, canAccess } from '@/utils/format'
 
 const routes = [
+  // E-Commerce Routes (Public)
+  {
+    path: '/ecommerce/login',
+    name: 'EcommerceAuth',
+    component: () => import('@/views/ecommerce/Auth.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/shop',
+    name: 'Shop',
+    component: () => import('@/views/ecommerce/Shop.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/product/:id',
+    name: 'ProductDetail',
+    component: () => import('@/views/ecommerce/ProductDetail.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/cart',
+    name: 'Cart',
+    component: () => import('@/views/ecommerce/Cart.vue'),
+    meta: { ecommerceAuth: true },
+  },
+  {
+    path: '/checkout/payment',
+    name: 'CheckoutPayment',
+    component: () => import('@/views/ecommerce/CheckoutPayment.vue'),
+    meta: { ecommerceAuth: true },
+  },
+  {
+    path: '/order-confirmation',
+    name: 'OrderConfirmation',
+    component: () => import('@/views/ecommerce/OrderConfirmation.vue'),
+    meta: { ecommerceAuth: true },
+  },
+  {
+    path: '/admin/ecommerce',
+    name: 'AdminOrders',
+    component: () => import('@/views/ecommerce/AdminOrders.vue'),
+    meta: { requiresAuth: true, roles: ACCESS.ADMIN },
+  },
+  // Admin Routes
   {
     path: '/login',
     name: 'Login',
@@ -124,7 +168,7 @@ const routes = [
       },
     ],
   },
-  { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
+  { path: '/:pathMatch(.*)*', redirect: '/shop' },
 ]
 
 const router = createRouter({
@@ -140,13 +184,25 @@ router.beforeEach(async (to, from, next) => {
 
   if (to.meta.public) return next()
 
-  if (!auth.isAuthenticated) {
-    const restored = await auth.restoreSession()
-    if (!restored) return next('/login')
+  // E-commerce auth routes
+  if (to.meta.ecommerceAuth) {
+    const { useEcommerceStore } = await import('@/stores/ecommerce')
+    const ecommerceStore = useEcommerceStore()
+    if (!ecommerceStore.isLoggedIn) {
+      return next('/ecommerce/login')
+    }
   }
 
-  if (to.meta.roles && !canAccess(auth.role, to.meta.roles)) {
-    return next('/dashboard')
+  // Admin auth routes
+  if (to.meta.requiresAuth) {
+    if (!auth.isAuthenticated) {
+      const restored = await auth.restoreSession()
+      if (!restored) return next('/login')
+    }
+
+    if (to.meta.roles && !canAccess(auth.role, to.meta.roles)) {
+      return next('/dashboard')
+    }
   }
 
   next()

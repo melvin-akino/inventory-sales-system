@@ -1,5 +1,7 @@
 pub mod auth;
 pub mod customers;
+pub mod ecommerce;
+pub mod industries;
 pub mod inventory;
 pub mod invoices;
 pub mod pharmacy;

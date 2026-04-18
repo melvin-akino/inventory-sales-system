@@ -1,34 +1,31 @@
-// Industry Configuration System
-// Defines what each industry is and its features
+/**
+ * Industry configuration and metadata
+ * Maps industry codes to their configuration, features, and custom fields
+ */
 
-export const INDUSTRIES = {
-  ELECTRICAL: 'electrical',
-  PHARMACY: 'pharmacy',
-  RETAIL: 'retail',
-  RESTAURANT: 'restaurant',
-  SUPERMARKET: 'supermarket',
-}
-
-export const INDUSTRY_CONFIG = {
-  electrical: {
-    id: 'electrical',
-    name: 'Electrical Supply Store',
-    icon: '🔌',
-    color: '#3b82f6',
-    description: 'Electrical equipment and lighting supplies',
+export const INDUSTRY_CONFIGS = {
+  electronics: {
+    id: 1,
+    code: 'electronics',
+    name: 'Electronics & Lighting',
+    description: 'Retail of electronic devices and lighting fixtures',
+    color: '#3B82F6',
+    icon: '💡',
     features: {
-      pos: true,
       inventory: true,
+      sales: true,
       customers: true,
       suppliers: true,
-      sales: true,
       reports: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
     },
     customFields: {
-      // Electrical-specific product fields
-      voltage: 'Voltage (V)',
-      wattage: 'Wattage (W)',
-      warranty: 'Warranty (months)',
+      wattage: { label: 'Wattage (W)', type: 'text', required: false },
+      colorTemp: { label: 'Color Temperature', type: 'select', required: false, options: ['Daylight', 'Warm White', 'Cool White', 'RGB'] },
+      lumens: { label: 'Brightness (Lumens)', type: 'number', required: false },
+      lifespanHours: { label: 'Lifespan (hours)', type: 'number', required: false },
     },
     defaultCategories: [
       'LED Bulbs',
@@ -42,31 +39,29 @@ export const INDUSTRY_CONFIG = {
   },
 
   pharmacy: {
-    id: 'pharmacy',
-    name: 'Pharmacy',
+    id: 2,
+    code: 'pharmacy',
+    name: 'Pharmacy & Healthcare',
+    description: 'Pharmacy and healthcare products distribution',
+    color: '#EC4899',
     icon: '💊',
-    color: '#10b981',
-    description: 'Pharmacy medication and health products',
     features: {
-      pos: true,
       inventory: true,
-      customers: true,
-      suppliers: true,
       sales: true,
+      customers: false, // Uses patients instead
+      suppliers: true,
       reports: true,
-      prescriptions: true, // Pharmacy-specific
-      patients: true, // Pharmacy-specific
-      expiry_tracking: true, // Pharmacy-specific
-      controlled_substances: true, // Pharmacy-specific
-      insurance: true, // Pharmacy-specific
+      pharmacy: true,
+      prescriptions: true,
+      controlledSubstances: true,
     },
     customFields: {
-      batch_number: 'Batch Number',
-      expiry_date: 'Expiry Date',
-      generic_name: 'Generic Name',
-      strength: 'Strength/Dosage',
-      manufacturer: 'Manufacturer',
-      prescription_required: 'Requires Prescription',
+      strength: { label: 'Strength', type: 'text', required: true },
+      dosageForm: { label: 'Dosage Form', type: 'select', required: true, options: ['Tablet', 'Capsule', 'Liquid', 'Injection', 'Cream', 'Ointment', 'Lotion'] },
+      manufacturer: { label: 'Manufacturer', type: 'text', required: true },
+      expiryDate: { label: 'Expiry Date', type: 'date', required: true },
+      genericName: { label: 'Generic Name', type: 'text', required: false },
+      ndc: { label: 'NDC Code', type: 'text', required: false },
     },
     defaultCategories: [
       'Antibiotics',
@@ -81,123 +76,197 @@ export const INDUSTRY_CONFIG = {
   },
 
   retail: {
-    id: 'retail',
-    name: 'Retail Store',
+    id: 3,
+    code: 'retail',
+    name: 'General Retail',
+    description: 'General retail and merchandise',
+    color: '#8B5CF6',
     icon: '🛍️',
-    color: '#f59e0b',
-    description: 'General retail and fashion store',
     features: {
-      pos: true,
       inventory: true,
+      sales: true,
       customers: true,
       suppliers: true,
-      sales: true,
       reports: true,
-      promotions: true,
-      loyalty: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
     },
     customFields: {
-      size: 'Size',
-      color: 'Color',
-      material: 'Material',
-      brand: 'Brand',
+      sku: { label: 'SKU', type: 'text', required: true },
+      brand: { label: 'Brand', type: 'text', required: false },
     },
-    defaultCategories: [
-      'Clothing',
-      'Footwear',
-      'Accessories',
-      'Electronics',
-      'Home & Garden',
-    ],
+    defaultCategories: ['General', 'Miscellaneous'],
   },
 
-  restaurant: {
-    id: 'restaurant',
-    name: 'Restaurant/Cafe',
-    icon: '🍽️',
-    color: '#ef4444',
-    description: 'Food and beverage service',
+  grocery: {
+    id: 4,
+    code: 'grocery',
+    name: 'Grocery & Food',
+    description: 'Grocery stores and food retail',
+    color: '#10B981',
+    icon: '🛒',
     features: {
-      pos: true,
       inventory: true,
+      sales: true,
       customers: true,
       suppliers: true,
-      sales: true,
       reports: true,
-      menu: true,
-      orders: true,
-      kitchen_display: true,
-      reservations: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
     },
     customFields: {
-      recipe: 'Recipe/Ingredients',
-      preparation_time: 'Prep Time (min)',
-      allergens: 'Allergens',
-      calories: 'Calories',
+      unitSize: { label: 'Unit Size', type: 'text', required: false },
+      expiryDate: { label: 'Best By Date', type: 'date', required: false },
+      allergens: { label: 'Allergens', type: 'textarea', required: false },
     },
-    defaultCategories: [
-      'Appetizers',
-      'Main Course',
-      'Desserts',
-      'Beverages',
-      'Sides',
-    ],
+    defaultCategories: ['Produce', 'Dairy', 'Meat', 'Beverages', 'Pantry', 'Frozen'],
   },
 
-  supermarket: {
-    id: 'supermarket',
-    name: 'Supermarket',
-    icon: '🏪',
-    color: '#8b5cf6',
-    description: 'Large-scale retail with groceries',
+  clothing: {
+    id: 5,
+    code: 'clothing',
+    name: 'Clothing & Fashion',
+    description: 'Apparel and fashion retail',
+    color: '#F59E0B',
+    icon: '👔',
     features: {
-      pos: true,
       inventory: true,
+      sales: true,
       customers: true,
       suppliers: true,
-      sales: true,
       reports: true,
-      promotions: true,
-      loyalty: true,
-      bulk_operations: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
     },
     customFields: {
-      barcode: 'Barcode',
-      weight: 'Weight',
-      expiry_date: 'Expiry Date',
-      origin: 'Country of Origin',
+      size: { label: 'Size', type: 'select', required: false, options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+      color: { label: 'Color', type: 'text', required: false },
+      material: { label: 'Material', type: 'text', required: false },
+      careInstructions: { label: 'Care Instructions', type: 'textarea', required: false },
     },
-    defaultCategories: [
-      'Groceries',
-      'Fruits & Vegetables',
-      'Meat & Seafood',
-      'Dairy',
-      'Beverages',
-      'Snacks',
-      'Personal Care',
-      'Household',
-    ],
+    defaultCategories: ['Mens', 'Womens', 'Kids', 'Accessories', 'Footwear'],
+  },
+
+  furniture: {
+    id: 6,
+    code: 'furniture',
+    name: 'Furniture & Home',
+    description: 'Furniture and home goods retail',
+    color: '#6366F1',
+    icon: '🛋️',
+    features: {
+      inventory: true,
+      sales: true,
+      customers: true,
+      suppliers: true,
+      reports: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
+    },
+    customFields: {
+      material: { label: 'Material', type: 'text', required: false },
+      dimensions: { label: 'Dimensions', type: 'text', required: false },
+      warranty: { label: 'Warranty (months)', type: 'number', required: false },
+      color: { label: 'Color', type: 'text', required: false },
+    },
+    defaultCategories: ['Bedroom', 'Living Room', 'Kitchen', 'Outdoor', 'Decor'],
+  },
+
+  automotive: {
+    id: 7,
+    code: 'automotive',
+    name: 'Automotive & Parts',
+    description: 'Automotive sales and parts distribution',
+    color: '#EF4444',
+    icon: '🚗',
+    features: {
+      inventory: true,
+      sales: true,
+      customers: true,
+      suppliers: true,
+      reports: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
+    },
+    customFields: {
+      fitment: { label: 'Vehicle Fitment', type: 'text', required: false },
+      partNumber: { label: 'Part Number', type: 'text', required: true },
+      warranty: { label: 'Warranty (months)', type: 'number', required: false },
+    },
+    defaultCategories: ['Engine Parts', 'Electrical', 'Suspension', 'Brake System', 'Accessories'],
+  },
+
+  cosmetics: {
+    id: 8,
+    code: 'cosmetics',
+    name: 'Cosmetics & Beauty',
+    description: 'Beauty products and cosmetics retail',
+    color: '#EC4899',
+    icon: '💄',
+    features: {
+      inventory: true,
+      sales: true,
+      customers: true,
+      suppliers: true,
+      reports: true,
+      pharmacy: false,
+      prescriptions: false,
+      controlledSubstances: false,
+    },
+    customFields: {
+      skinType: { label: 'Suitable For', type: 'select', required: false, options: ['All', 'Dry', 'Oily', 'Combination', 'Sensitive'] },
+      ingredients: { label: 'Key Ingredients', type: 'textarea', required: false },
+      volume: { label: 'Volume (ml)', type: 'number', required: false },
+      expiryDate: { label: 'Expiry Date', type: 'date', required: false },
+    },
+    defaultCategories: ['Skincare', 'Makeup', 'Hair Care', 'Fragrance', 'Body Care'],
   },
 }
 
 /**
- * Get industry configuration by ID
+ * Get industry config by ID or code
  */
-export function getIndustryConfig(industryId) {
-  return INDUSTRY_CONFIG[industryId] || INDUSTRY_CONFIG.electrical
+export function getIndustryConfig(industryIdOrCode) {
+  if (typeof industryIdOrCode === 'number') {
+    // Search by ID
+    return Object.values(INDUSTRY_CONFIGS).find((cfg) => cfg.id === industryIdOrCode)
+  }
+  // Search by code
+  return INDUSTRY_CONFIGS[industryIdOrCode] || null
 }
 
 /**
- * Get list of all available industries
+ * Get all industry configs
  */
-export function getAvailableIndustries() {
-  return Object.values(INDUSTRY_CONFIG)
+export function getAllIndustryConfigs() {
+  return Object.values(INDUSTRY_CONFIGS)
 }
 
 /**
- * Check if industry has a specific feature
+ * Check if industry has a feature
  */
-export function hasFeature(industryId, featureName) {
-  const config = getIndustryConfig(industryId)
-  return config.features[featureName] === true
+export function hasIndustryFeature(industryCode, featureName) {
+  const config = getIndustryConfig(industryCode)
+  return config?.features[featureName] === true
+}
+
+/**
+ * Get custom fields for industry
+ */
+export function getIndustryCustomFields(industryCode) {
+  const config = getIndustryConfig(industryCode)
+  return config?.customFields || {}
+}
+
+/**
+ * Get default categories for industry
+ */
+export function getIndustryDefaultCategories(industryCode) {
+  const config = getIndustryConfig(industryCode)
+  return config?.defaultCategories || []
 }

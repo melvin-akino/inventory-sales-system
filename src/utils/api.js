@@ -138,3 +138,11 @@ export const pharmacyApi = {
   // Alerts
   getExpiryAlerts: (token) => invoke('pharmacy/expiry-alerts', { token }),
 }
+
+// Industries
+export const industriesApi = {
+  getIndustries: (token) => invoke('get_industries', { token }),
+  getIndustry: (token, id) => invoke('get_industry', { token, id }),
+  addIndustryAttribute: (token, request) => invoke('add_industry_attribute', { token, request }),
+  assignUserToIndustry: (token, request) => invoke('assign_user_to_industry', { token, request }),
+}

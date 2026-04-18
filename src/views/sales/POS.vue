@@ -103,9 +103,9 @@
               <!-- Stock -->
               <p :class="[
                 'text-xs font-medium',
-                product.quantity_on_hand > 0 ? 'text-green-600' : 'text-red-600'
+                product.quantity > 0 ? 'text-green-600' : 'text-red-600'
               ]">
-                {{ product.quantity_on_hand > 0 ? `${product.quantity_on_hand} in stock` : 'Out of stock' }}
+                {{ product.quantity > 0 ? `${product.quantity} in stock` : 'Out of stock' }}
               </p>
             </button>
           </div>
@@ -367,7 +367,7 @@ function addToCart(product) {
   const existing = cartItems.value.find(item => item.product_id === product.id)
 
   if (existing) {
-    if (existing.quantity < product.quantity_on_hand) {
+    if (existing.quantity < product.quantity) {
       existing.quantity += 1
     }
   } else {
@@ -376,7 +376,7 @@ function addToCart(product) {
       product_name: product.name,
       selling_price: product.selling_price,
       quantity: 1,
-      quantity_available: product.quantity_on_hand,
+      quantity_available: product.quantity,
       discount: 0,
     })
   }
